@@ -1,0 +1,14 @@
+[[package]]
+name = "g-flite"
+version = "0.1.0"
+dependencies = [
+ "hound 3.4.0 (git+https://github.com/kubkon/hound)",
+]
+
+[[package]]
+name = "hound"
+version = "3.4.0"
+source = "git+https://github.com/kubkon/hound#c648ab6e6af092cf201ed9881cb77827c165eb2f"
+
+[metadata]
+"checksum hound 3.4.0 (git+https://github.com/kubkon/hound)" = "<none>"

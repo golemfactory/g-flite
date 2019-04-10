@@ -1,0 +1,12 @@
+[package]
+name = "g-flite"
+version = "0.1.0"
+authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
+edition = "2018"
+
+[dependencies]
+hound = { git="https://github.com/kubkon/hound" }
+
+[[bin]]
+name = "g_flite"
+path = "src/main.rs"
