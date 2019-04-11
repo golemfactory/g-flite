@@ -52,14 +52,16 @@ fn split_textfile(textfile: &str) -> Vec<String> {
     chunks
 }
 
-fn run_on_golem() {}
+fn run_on_golem(chunks: Vec<String>) -> Vec<String> {
+    Vec::new()
+}
 
-fn combine_wave(wavefiles: &[&str], output_wavefile: &str) {
+fn combine_wave(wavefiles: Vec<String>, output_wavefile: &str) {
     if wavefiles.is_empty() {
         return;
     }
 
-    let reader = hound::WavReader::open(wavefiles[0]).unwrap();
+    let reader = hound::WavReader::open(&wavefiles[0]).unwrap();
     let spec = reader.spec();
     let mut writer = hound::WavWriter::create(output_wavefile, spec).unwrap();
     for sample in reader.into_samples::<i16>() {
@@ -80,6 +82,6 @@ fn main() {
         .unwrap_or_else(|e| e.exit());
 
     let chunks = split_textfile(&args.arg_textfile);
-    // let wavefiles = run_on_golem(chunks);
-    // combine_wave(wavefiles, &args.arg_wavefile);
+    let wavefiles = run_on_golem(chunks);
+    combine_wave(wavefiles, &args.arg_wavefile);
 }
