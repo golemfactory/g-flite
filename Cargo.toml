@@ -8,6 +8,9 @@ edition = "2018"
 hound = { git="https://github.com/kubkon/hound" }
 docopt = "1.1"
 serde = { version="1.0", features=["derive"] }
+serde_json = "1.0"
+indicatif = "0.11"
+console = ">=0.7.1, <1.0.0"
 
 [[bin]]
 name = "g_flite"

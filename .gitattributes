@@ -1,0 +1,2 @@
+assets/flite.js filter=lfs diff=lfs merge=lfs -text
+assets/flite.wasm filter=lfs diff=lfs merge=lfs -text
