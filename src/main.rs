@@ -6,7 +6,7 @@ use std::path;
 use std::process::Command;
 use std::time::SystemTime;
 
-use console::{style, Emoji};
+use console::style;
 use docopt::Docopt;
 use hound;
 use indicatif::ProgressBar;
@@ -17,48 +17,55 @@ const USAGE: &str = "
 g_flite: flite distributed over Golem network
 
 Usage:
-    g_flite <textfile> <wavefile>
+    g_flite <textfile> <wavefile> [--subtasks=<subtasks>]
     g_flite (-h | --help)
 
 Options:
-    -h --help   Show this screen.
+    --subtasks=<subtasks>   Number of Golem subtasks.
+    -h --help               Show this screen.
 ";
 
 #[derive(Debug, Deserialize)]
 struct Args {
     arg_textfile: String,
     arg_wavefile: String,
+    flag_subtasks: Option<usize>,
 }
 
 const FLITE_JS: &[u8] = include_bytes!("../assets/flite.js");
 const FLITE_WASM: &[u8] = include_bytes!("../assets/flite.wasm");
-const SPLIT_BY_WORDS: usize = 100;
+const DEFAULT_NUM_SUBTASKS: usize = 6;
 
-static TRUCK: Emoji = Emoji("🚚  ", "");
-static CLIP: Emoji = Emoji("🔗  ", "");
-static PAPER: Emoji = Emoji("📃  ", "");
-static HOURGLASS: Emoji = Emoji("⌛ ", "");
+static TRUCK: &str = "🚚  ";
+static CLIP: &str = "🔗  ";
+static PAPER: &str = "📃  ";
+static HOURGLASS: &str = "⌛  ";
 
-fn split_textfile(textfile: &str) -> Vec<String> {
-    println!(
-        "{} {}Splitting '{}' into chunks...",
-        style("[1/5]").bold().dim(),
-        PAPER,
-        textfile,
-    );
-
+fn split_textfile(textfile: &str, num_subtasks: Option<usize>) -> Vec<String> {
     let mut reader = fs::File::open(textfile).unwrap();
     let mut contents = String::new();
     reader.read_to_string(&mut contents).unwrap();
 
-    let mut chunks: Vec<String> = Vec::new();
+    let word_count = contents.split_whitespace().count();
+    let num_subtasks = num_subtasks.unwrap_or(DEFAULT_NUM_SUBTASKS);
+
+    println!(
+        "{} {}Splitting '{}' into {} Golem subtasks...",
+        style("[1/4]").bold().dim(),
+        PAPER,
+        textfile,
+        num_subtasks,
+    );
+
+    let mut chunks: Vec<String> = Vec::with_capacity(num_subtasks);
+    let num_words = (word_count as f64 / num_subtasks as f64).round() as usize;
 
     let mut acc: String = String::new();
     for (i, word) in contents.split_whitespace().enumerate() {
         acc.push_str(word);
         acc.push(' ');
 
-        if (i + 1) % SPLIT_BY_WORDS == 0 {
+        if (i + 1) % num_words == 0 {
             chunks.push(acc);
             acc = String::new();
             continue;
@@ -73,13 +80,13 @@ fn split_textfile(textfile: &str) -> Vec<String> {
 }
 
 fn run_on_golem(chunks: Vec<String>) -> VecDeque<String> {
-    // prepare workspace
     println!(
-        "{} {}Preparing Golem task...",
-        style("[2/5]").bold().dim(),
-        HOURGLASS
+        "{} {}Sending task to Golem...",
+        style("[2/4]").bold().dim(),
+        TRUCK
     );
 
+    // prepare workspace
     let mut workspace = env::temp_dir();
     let time_now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -157,12 +164,6 @@ fn run_on_golem(chunks: Vec<String>) -> VecDeque<String> {
     serde_json::to_writer_pretty(f, &task_json).unwrap();
 
     // send to Golem
-    println!(
-        "{} {}Sending task to Golem...",
-        style("[3/5]").bold().dim(),
-        TRUCK
-    );
-
     let output = Command::new("/bin/sh")
         .arg("-c")
         .arg(format!("$HOME/.virtualenvs/golem/bin/python $HOME/dev/golem/golemcli.py --datadir=$HOME/datadir1 --port=61001 tasks create {}", input_json.to_str().unwrap()))
@@ -173,7 +174,7 @@ fn run_on_golem(chunks: Vec<String>) -> VecDeque<String> {
     // wait
     println!(
         "{} {}Waiting on compute to finish...",
-        style("[4/5]").bold().dim(),
+        style("[3/4]").bold().dim(),
         HOURGLASS
     );
     let num_tasks = wavefiles.len() as u64;
@@ -215,7 +216,7 @@ fn combine_wave(mut wavefiles: VecDeque<String>, output_wavefile: &str) {
 
     println!(
         "{} {}Combining output into '{}'...",
-        style("[5/5]").bold().dim(),
+        style("[4/4]").bold().dim(),
         CLIP,
         output_wavefile
     );
@@ -241,7 +242,7 @@ fn main() {
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
 
-    let chunks = split_textfile(&args.arg_textfile);
+    let chunks = split_textfile(&args.arg_textfile, args.flag_subtasks);
     let wavefiles = run_on_golem(chunks);
     combine_wave(wavefiles, &args.arg_wavefile);
 }
