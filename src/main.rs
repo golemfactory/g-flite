@@ -3,7 +3,6 @@ use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::path;
-use std::process::Command;
 use std::time::SystemTime;
 
 use console::style;
@@ -12,6 +11,10 @@ use hound;
 use indicatif::ProgressBar;
 use serde::Deserialize;
 use serde_json::{json, Map};
+
+mod ctx;
+
+use golem_rpc_api::comp::{self, AsGolemComp};
 
 const USAGE: &str = "
 g_flite: flite distributed over Golem network
@@ -163,13 +166,18 @@ fn run_on_golem(chunks: Vec<String>) -> VecDeque<String> {
     let f = fs::File::create(input_json.as_path()).unwrap();
     serde_json::to_writer_pretty(f, &task_json).unwrap();
 
+    let mut ctx = ctx::CliCtx {
+        rpc_addr: ("127.0.0.1".into(), 61001),
+        data_dir: path::PathBuf::from("/home/jakubkonka/datadir1/rinkeby"),
+        json_output: true,
+    };
+
     // send to Golem
-    let output = Command::new("/bin/sh")
-        .arg("-c")
-        .arg(format!("$HOME/.virtualenvs/golem/bin/python $HOME/dev/golem/golemcli.py --datadir=$HOME/datadir1 --port=61001 tasks create {}", input_json.to_str().unwrap()))
-        .output()
+    let (mut sys, endpoint) = ctx.connect_to_app().unwrap();
+    let resp = sys
+        .block_on(endpoint.as_golem_comp().create_task(task_json))
         .unwrap();
-    let task_id = String::from_utf8(output.stdout).unwrap();
+    let task_id = resp.0.unwrap();
 
     // wait
     println!(
@@ -183,17 +191,11 @@ fn run_on_golem(chunks: Vec<String>) -> VecDeque<String> {
     let mut old_progress = 0.0;
 
     loop {
-        let output = Command::new("/bin/sh")
-                        .arg("-c")
-                        .arg(format!("$HOME/.virtualenvs/golem/bin/python $HOME/dev/golem/golemcli.py --datadir=$HOME/datadir1 --port=61001 tasks show {}", task_id))
-                        .output()
-                        .unwrap();
-        let output = String::from_utf8(output.stdout).unwrap();
-        let status_idx = output.find("status: ").unwrap();
-        let status = output[(status_idx + 8)..].split('\n').next().unwrap();
-        let progress_idx = output.find("progress: ").unwrap();
-        let progress = output[(progress_idx + 10)..].split('\n').next().unwrap();
-        let progress = progress[0..(progress.len() - 2)].parse::<f64>().unwrap();
+        let resp = sys
+            .block_on(endpoint.as_golem_comp().get_task(task_id.clone()))
+            .unwrap();
+        let task_info = resp.unwrap();
+        let progress = task_info.progress.as_f64().unwrap() * 100.0;
 
         if progress != old_progress {
             let delta = (progress - old_progress) / 100.0;
@@ -201,8 +203,9 @@ fn run_on_golem(chunks: Vec<String>) -> VecDeque<String> {
             bar.inc((delta * num_tasks as f64).round() as u64);
         }
 
-        if status == "Finished" {
-            break;
+        match task_info.status {
+            comp::TaskStatus::Finished => break,
+            _ => {}
         }
     }
 
@@ -241,6 +244,8 @@ fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
+
+    env_logger::init();
 
     let chunks = split_textfile(&args.arg_textfile, args.flag_subtasks);
     let wavefiles = run_on_golem(chunks);
