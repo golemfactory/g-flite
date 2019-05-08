@@ -5,35 +5,16 @@ use std::io::{Read, Write};
 use std::path;
 use std::time::SystemTime;
 
+use clap::{value_t, App, Arg};
 use console::style;
-use docopt::Docopt;
+use env_logger::{Builder, Env};
 use hound;
 use indicatif::ProgressBar;
-use serde::Deserialize;
 use serde_json::{json, Map};
 
 mod ctx;
 
 use golem_rpc_api::comp::{self, AsGolemComp};
-
-const USAGE: &str = "
-g_flite: flite distributed over Golem network
-
-Usage:
-    g_flite <textfile> <wavefile> [--subtasks=<subtasks>]
-    g_flite (-h | --help)
-
-Options:
-    --subtasks=<subtasks>   Number of Golem subtasks.
-    -h --help               Show this screen.
-";
-
-#[derive(Debug, Deserialize)]
-struct Args {
-    arg_textfile: String,
-    arg_wavefile: String,
-    flag_subtasks: Option<usize>,
-}
 
 const FLITE_JS: &[u8] = include_bytes!("../assets/flite.js");
 const FLITE_WASM: &[u8] = include_bytes!("../assets/flite.wasm");
@@ -44,13 +25,12 @@ static CLIP: &str = "🔗  ";
 static PAPER: &str = "📃  ";
 static HOURGLASS: &str = "⌛  ";
 
-fn split_textfile(textfile: &str, num_subtasks: Option<usize>) -> Vec<String> {
+fn split_textfile(textfile: &str, num_subtasks: usize) -> Vec<String> {
     let mut reader = fs::File::open(textfile).unwrap();
     let mut contents = String::new();
     reader.read_to_string(&mut contents).unwrap();
 
     let word_count = contents.split_whitespace().count();
-    let num_subtasks = num_subtasks.unwrap_or(DEFAULT_NUM_SUBTASKS);
 
     println!(
         "{} {}Splitting '{}' into {} Golem subtasks...",
@@ -82,7 +62,7 @@ fn split_textfile(textfile: &str, num_subtasks: Option<usize>) -> Vec<String> {
     chunks
 }
 
-fn run_on_golem(chunks: Vec<String>) -> VecDeque<String> {
+fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) -> VecDeque<String> {
     println!(
         "{} {}Sending task to Golem...",
         style("[2/4]").bold().dim(),
@@ -167,8 +147,8 @@ fn run_on_golem(chunks: Vec<String>) -> VecDeque<String> {
     serde_json::to_writer_pretty(f, &task_json).unwrap();
 
     let mut ctx = ctx::CliCtx {
-        rpc_addr: ("127.0.0.1".into(), 61001),
-        data_dir: path::PathBuf::from("/home/jakubkonka/datadir1/rinkeby"),
+        rpc_addr: (address.into(), port),
+        data_dir: path::PathBuf::from(datadir),
         json_output: true,
     };
 
@@ -241,13 +221,69 @@ fn combine_wave(mut wavefiles: VecDeque<String>, output_wavefile: &str) {
 }
 
 fn main() {
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| d.deserialize())
-        .unwrap_or_else(|e| e.exit());
+    let matches = App::new("g_flite")
+        .version("0.1.0")
+        .author("Jakub Konka <jakub.konka@golem.network>")
+        .about("flite, a text-to-speech program, distributed over Golem network")
+        .arg(
+            Arg::with_name("TEXTFILE")
+                .help("Input text file")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            Arg::with_name("WAVFILE")
+                .help("Output WAV file")
+                .required(true)
+                .index(2),
+        )
+        .arg(
+            Arg::with_name("subtasks")
+                .long("subtasks")
+                .value_name("NUM")
+                .help("Sets number of Golem subtasks")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("datadir")
+                .long("datadir")
+                .value_name("DATADIR")
+                .help("Sets path to Golem datadir")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("address")
+                .long("address")
+                .value_name("ADDRESS")
+                .help("Sets RPC address to Golem instance")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("port")
+                .long("port")
+                .value_name("PORT")
+                .help("Sets RPC port to Golem instance")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("verbose")
+                .long("verbose")
+                .short("v")
+                .help("Turns verbose logging on")
+                .takes_value(false),
+        )
+        .get_matches();
 
-    env_logger::init();
+    let subtasks = value_t!(matches.value_of("subtasks"), usize).unwrap_or(DEFAULT_NUM_SUBTASKS);
+    let datadir = matches.value_of("datadir").unwrap_or("~/datadir1/rinkeby");
+    let address = matches.value_of("address").unwrap_or("127.0.0.1");
+    let port = value_t!(matches.value_of("port"), u16).unwrap_or(61000);
 
-    let chunks = split_textfile(&args.arg_textfile, args.flag_subtasks);
-    let wavefiles = run_on_golem(chunks);
-    combine_wave(wavefiles, &args.arg_wavefile);
+    if matches.is_present("verbose") {
+        Builder::from_env(Env::default().default_filter_or("debug")).init();
+    }
+
+    let chunks = split_textfile(matches.value_of("TEXTFILE").unwrap(), subtasks);
+    let wavefiles = run_on_golem(chunks, datadir, address, port);
+    combine_wave(wavefiles, matches.value_of("WAVFILE").unwrap());
 }
