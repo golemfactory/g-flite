@@ -1,23 +1,18 @@
-use std::collections::VecDeque;
-use std::env;
-use std::fs;
-use std::io::{Read, Write};
-use std::path;
-use std::time::SystemTime;
+mod golem_ctx;
+mod task;
 
 use clap::{value_t, App, Arg};
 use console::style;
 use env_logger::{Builder, Env};
+use golem_rpc_api::comp::{self, AsGolemComp};
 use hound;
 use indicatif::ProgressBar;
-use serde_json::{json, Map};
+use std::env;
+use std::fs;
+use std::io::Read;
+use std::path;
+use std::time::SystemTime;
 
-mod ctx;
-
-use golem_rpc_api::comp::{self, AsGolemComp};
-
-const FLITE_JS: &[u8] = include_bytes!("../assets/flite.js");
-const FLITE_WASM: &[u8] = include_bytes!("../assets/flite.wasm");
 const DEFAULT_NUM_SUBTASKS: usize = 6;
 
 static TRUCK: &str = "🚚  ";
@@ -62,7 +57,7 @@ fn split_textfile(textfile: &str, num_subtasks: usize) -> Vec<String> {
     chunks
 }
 
-fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) -> VecDeque<String> {
+fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) -> task::Task {
     println!(
         "{} {}Sending task to Golem...",
         style("[2/4]").bold().dim(),
@@ -78,84 +73,24 @@ fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) ->
     workspace.push(subdir);
     fs::create_dir(workspace.as_path()).unwrap();
 
-    let mut input_dir = path::PathBuf::from(workspace.as_path());
-    input_dir.push("in");
-    fs::create_dir(input_dir.as_path()).unwrap();
+    // prepare Golem task
+    let mut task_builder = task::TaskBuilder::new(workspace);
 
-    let mut output_dir = path::PathBuf::from(workspace.as_path());
-    output_dir.push("out");
-    fs::create_dir(output_dir.as_path()).unwrap();
-
-    let mut js = path::PathBuf::from(input_dir.as_path());
-    js.push("flite.js");
-    let mut f = fs::File::create(js).unwrap();
-    f.write_all(FLITE_JS).unwrap();
-
-    let mut wasm = path::PathBuf::from(input_dir.as_path());
-    wasm.push("flite.wasm");
-    let mut f = fs::File::create(wasm).unwrap();
-    f.write_all(FLITE_WASM).unwrap();
-
-    let mut subtasks_map = Map::new();
-    let mut wavefiles = VecDeque::new();
-
-    for (i, chunk) in chunks.into_iter().enumerate() {
-        let mut subtask_input = path::PathBuf::from(input_dir.as_path());
-        let subtask_name = format!("subtask{}", i);
-
-        subtask_input.push(&subtask_name);
-        fs::create_dir(subtask_input.as_path()).unwrap();
-
-        subtask_input.push("in.txt");
-        let mut f = fs::File::create(subtask_input).unwrap();
-        f.write_all(chunk.as_bytes()).unwrap();
-
-        let mut subtask_output = path::PathBuf::from(output_dir.as_path());
-        subtask_output.push(&subtask_name);
-        fs::create_dir(subtask_output.as_path()).unwrap();
-
-        subtasks_map.insert(
-            subtask_name.clone(),
-            json!({
-                "exec_args": ["in.txt", "in.wav"],
-                "output_file_paths": ["in.wav"],
-            }),
-        );
-
-        subtask_output.push("in.wav");
-        wavefiles.push_back(subtask_output.to_str().unwrap().to_string());
+    for chunk in chunks {
+        task_builder.add_subtask(chunk);
     }
 
-    let task_json = json!({
-        "type": "wasm",
-        "name": "g_flite",
-        "bid": 1,
-        "subtask_timeout": "00:10:00",
-        "timeout": "00:10:00",
-        "options": {
-            "js_name": "flite.js",
-            "wasm_name": "flite.wasm",
-            "input_dir": input_dir.to_str().unwrap(),
-            "output_dir": output_dir.to_str().unwrap(),
-            "subtasks": subtasks_map,
-        }
-    });
-
-    let mut input_json = path::PathBuf::from(workspace.as_path());
-    input_json.push("task.json");
-    let f = fs::File::create(input_json.as_path()).unwrap();
-    serde_json::to_writer_pretty(f, &task_json).unwrap();
-
-    let mut ctx = ctx::CliCtx {
-        rpc_addr: (address.into(), port),
-        data_dir: path::PathBuf::from(datadir),
-        json_output: true,
-    };
+    let task = task_builder.build();
 
     // send to Golem
+    let mut ctx = golem_ctx::GolemCtx {
+        rpc_addr: (address.into(), port),
+        data_dir: path::PathBuf::from(datadir),
+    };
+
     let (mut sys, endpoint) = ctx.connect_to_app().unwrap();
     let resp = sys
-        .block_on(endpoint.as_golem_comp().create_task(task_json))
+        .block_on(endpoint.as_golem_comp().create_task(task.json.clone()))
         .unwrap();
     let task_id = resp.0.unwrap();
 
@@ -165,7 +100,7 @@ fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) ->
         style("[3/4]").bold().dim(),
         HOURGLASS
     );
-    let num_tasks = wavefiles.len() as u64;
+    let num_tasks = task.expected_output_paths.len() as u64;
     let bar = ProgressBar::new(num_tasks);
     bar.inc(0);
     let mut old_progress = 0.0;
@@ -189,11 +124,11 @@ fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) ->
         }
     }
 
-    wavefiles
+    task
 }
 
-fn combine_wave(mut wavefiles: VecDeque<String>, output_wavefile: &str) {
-    if wavefiles.is_empty() {
+fn combine_wave(mut task: task::Task, output_wavefile: &str) {
+    if task.expected_output_paths.is_empty() {
         return;
     }
 
@@ -204,7 +139,7 @@ fn combine_wave(mut wavefiles: VecDeque<String>, output_wavefile: &str) {
         output_wavefile
     );
 
-    let first = wavefiles.pop_front().unwrap();
+    let first = task.expected_output_paths.pop_front().unwrap();
     let reader = hound::WavReader::open(first).unwrap();
     let spec = reader.spec();
     let mut writer = hound::WavWriter::create(output_wavefile, spec).unwrap();
@@ -212,8 +147,8 @@ fn combine_wave(mut wavefiles: VecDeque<String>, output_wavefile: &str) {
         writer.write_sample(sample.unwrap()).unwrap();
     }
 
-    for wavefile in wavefiles {
-        let reader = hound::WavReader::open(wavefile).unwrap();
+    for expected_file in task.expected_output_paths {
+        let reader = hound::WavReader::open(expected_file).unwrap();
         for sample in reader.into_samples::<i16>() {
             writer.write_sample(sample.unwrap()).unwrap();
         }
