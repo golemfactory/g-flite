@@ -196,7 +196,7 @@ fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<(), Box<d
 fn main() {
     let matches = App::new("g_flite")
         .version("0.1.0")
-        .author("Jakub Konka <jakub.konka@golem.network>")
+        .author("Golem RnD Team <contact@golem.network>")
         .about("flite, a text-to-speech program, distributed over Golem network")
         .arg(
             Arg::with_name("TEXTFILE")
@@ -214,7 +214,7 @@ fn main() {
             Arg::with_name("subtasks")
                 .long("subtasks")
                 .value_name("NUM")
-                .help("Sets number of Golem subtasks")
+                .help("Sets number of Golem subtasks (defaults to 6)")
                 .takes_value(true),
         )
         .arg(
