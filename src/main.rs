@@ -3,6 +3,7 @@ mod task;
 
 use clap::{value_t, App, Arg};
 use console::style;
+use directories::ProjectDirs;
 use env_logger::{Builder, Env};
 use golem_rpc_api::comp::{self, AsGolemComp};
 use hound;
@@ -76,9 +77,9 @@ fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>, Bo
     Ok(chunks)
 }
 
-fn run_on_golem(
+fn run_on_golem<S: AsRef<path::Path>>(
     chunks: Vec<String>,
-    datadir: &str,
+    datadir: S,
     address: &str,
     port: u16,
 ) -> Result<task::Task, Box<dyn StdError>> {
@@ -109,7 +110,7 @@ fn run_on_golem(
     // send to Golem
     let mut ctx = golem_ctx::GolemCtx {
         rpc_addr: (address.into(), port),
-        data_dir: path::PathBuf::from(datadir),
+        data_dir: datadir.as_ref().into(),
     };
 
     let (mut sys, endpoint) = ctx.connect_to_app()?;
@@ -248,9 +249,17 @@ fn main() {
         .get_matches();
 
     let subtasks = value_t!(matches.value_of("subtasks"), usize).unwrap_or(DEFAULT_NUM_SUBTASKS);
-    let datadir = matches.value_of("datadir").unwrap_or("~/datadir1/rinkeby");
     let address = matches.value_of("address").unwrap_or("127.0.0.1");
     let port = value_t!(matches.value_of("port"), u16).unwrap_or(61000);
+
+    let datadir = value_t!(matches.value_of("datadir"), path::PathBuf)
+        .unwrap_or_else(|_| match ProjectDirs::from("", "", "golem") {
+            Some(project_dirs) => project_dirs.data_dir().join("default"),
+            None => {
+                panic!("Couldn't lock on to user standard libs. Are you running a supported OS?")
+            }
+        })
+        .join("rinkeby");
 
     if matches.is_present("verbose") {
         Builder::from_env(Env::default().default_filter_or("info")).init();
