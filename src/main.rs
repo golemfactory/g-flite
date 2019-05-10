@@ -8,6 +8,7 @@ use golem_rpc_api::comp::{self, AsGolemComp};
 use hound;
 use indicatif::ProgressBar;
 use std::env;
+pub use std::error::Error as StdError;
 use std::fs;
 use std::io::Read;
 use std::path;
@@ -20,12 +21,14 @@ static CLIP: &str = "🔗  ";
 static PAPER: &str = "📃  ";
 static HOURGLASS: &str = "⌛  ";
 
-fn split_textfile(textfile: &str, num_subtasks: usize) -> Vec<String> {
-    let mut reader = fs::File::open(textfile).unwrap();
+fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>, Box<dyn StdError>> {
+    let mut reader = fs::File::open(textfile)?;
     let mut contents = String::new();
-    reader.read_to_string(&mut contents).unwrap();
+    reader.read_to_string(&mut contents)?;
 
     let word_count = contents.split_whitespace().count();
+
+    log::info!("Each chunk will have max of {} words", word_count);
 
     println!(
         "{} {}Splitting '{}' into {} Golem subtasks...",
@@ -44,6 +47,14 @@ fn split_textfile(textfile: &str, num_subtasks: usize) -> Vec<String> {
         acc.push(' ');
 
         if (i + 1) % num_words == 0 {
+            if log::log_enabled!(log::Level::Info) {
+                log::info!(
+                    "Chunk {} has {} words",
+                    chunks.len(),
+                    acc.split_whitespace().count()
+                );
+            }
+
             chunks.push(acc);
             acc = String::new();
             continue;
@@ -51,13 +62,26 @@ fn split_textfile(textfile: &str, num_subtasks: usize) -> Vec<String> {
     }
 
     if !acc.is_empty() {
+        if log::log_enabled!(log::Level::Info) {
+            log::info!(
+                "Chunk {} has {} words",
+                chunks.len(),
+                acc.split_whitespace().count()
+            );
+        }
+
         chunks.push(acc);
     }
 
-    chunks
+    Ok(chunks)
 }
 
-fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) -> task::Task {
+fn run_on_golem(
+    chunks: Vec<String>,
+    datadir: &str,
+    address: &str,
+    port: u16,
+) -> Result<task::Task, Box<dyn StdError>> {
     println!(
         "{} {}Sending task to Golem...",
         style("[2/4]").bold().dim(),
@@ -66,12 +90,12 @@ fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) ->
 
     // prepare workspace
     let mut workspace = env::temp_dir();
-    let time_now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap();
+    let time_now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
     let subdir = format!("g_flite_{}", time_now.as_secs());
     workspace.push(subdir);
-    fs::create_dir(workspace.as_path()).unwrap();
+    fs::create_dir(workspace.as_path())?;
+
+    log::info!("Will prepare task in '{:?}'", workspace);
 
     // prepare Golem task
     let mut task_builder = task::TaskBuilder::new(workspace);
@@ -80,7 +104,7 @@ fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) ->
         task_builder.add_subtask(chunk);
     }
 
-    let task = task_builder.build();
+    let task = task_builder.build()?;
 
     // send to Golem
     let mut ctx = golem_ctx::GolemCtx {
@@ -88,11 +112,11 @@ fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) ->
         data_dir: path::PathBuf::from(datadir),
     };
 
-    let (mut sys, endpoint) = ctx.connect_to_app().unwrap();
+    let (mut sys, endpoint) = ctx.connect_to_app()?;
     let resp = sys
         .block_on(endpoint.as_golem_comp().create_task(task.json.clone()))
-        .unwrap();
-    let task_id = resp.0.unwrap();
+        .expect("could create a Golem task");
+    let task_id = resp.0.expect("could extract Golem task id");
 
     // wait
     println!(
@@ -108,9 +132,16 @@ fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) ->
     loop {
         let resp = sys
             .block_on(endpoint.as_golem_comp().get_task(task_id.clone()))
-            .unwrap();
-        let task_info = resp.unwrap();
-        let progress = task_info.progress.as_f64().unwrap() * 100.0;
+            .expect("could poll for Golem task");
+        let task_info = resp.expect("could parse response from Golem");
+
+        log::info!("Received task info from Golem: {:?}", task_info);
+
+        let progress = task_info
+            .progress
+            .as_f64()
+            .expect("could extract progress from Golem task")
+            * 100.0;
 
         if progress != old_progress {
             let delta = (progress - old_progress) / 100.0;
@@ -122,15 +153,18 @@ fn run_on_golem(chunks: Vec<String>, datadir: &str, address: &str, port: u16) ->
             comp::TaskStatus::Finished => break,
             _ => {}
         }
+
+        std::thread::sleep(std::time::Duration::from_secs(1));
     }
 
-    task
+    Ok(task)
 }
 
-fn combine_wave(mut task: task::Task, output_wavefile: &str) {
-    if task.expected_output_paths.is_empty() {
-        return;
-    }
+fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<(), Box<dyn StdError>> {
+    let first = task
+        .expected_output_paths
+        .pop_front()
+        .expect("at least one Golem subtask received");
 
     println!(
         "{} {}Combining output into '{}'...",
@@ -139,20 +173,24 @@ fn combine_wave(mut task: task::Task, output_wavefile: &str) {
         output_wavefile
     );
 
-    let first = task.expected_output_paths.pop_front().unwrap();
-    let reader = hound::WavReader::open(first).unwrap();
+    let reader = hound::WavReader::open(first)?;
     let spec = reader.spec();
-    let mut writer = hound::WavWriter::create(output_wavefile, spec).unwrap();
+
+    log::info!("Using Wav spec: {:?}", spec);
+
+    let mut writer = hound::WavWriter::create(output_wavefile, spec)?;
     for sample in reader.into_samples::<i16>() {
-        writer.write_sample(sample.unwrap()).unwrap();
+        writer.write_sample(sample?)?;
     }
 
     for expected_file in task.expected_output_paths {
-        let reader = hound::WavReader::open(expected_file).unwrap();
+        let reader = hound::WavReader::open(expected_file)?;
         for sample in reader.into_samples::<i16>() {
-            writer.write_sample(sample.unwrap()).unwrap();
+            writer.write_sample(sample?)?;
         }
     }
+
+    Ok(())
 }
 
 fn main() {
@@ -215,10 +253,13 @@ fn main() {
     let port = value_t!(matches.value_of("port"), u16).unwrap_or(61000);
 
     if matches.is_present("verbose") {
-        Builder::from_env(Env::default().default_filter_or("debug")).init();
+        Builder::from_env(Env::default().default_filter_or("info")).init();
     }
 
-    let chunks = split_textfile(matches.value_of("TEXTFILE").unwrap(), subtasks);
-    let wavefiles = run_on_golem(chunks, datadir, address, port);
-    combine_wave(wavefiles, matches.value_of("WAVFILE").unwrap());
+    if let Err(err) = split_textfile(matches.value_of("TEXTFILE").unwrap(), subtasks)
+        .and_then(|chunks| run_on_golem(chunks, datadir, address, port))
+        .and_then(|task| combine_wave(task, matches.value_of("WAVFILE").unwrap()))
+    {
+        eprintln!("Unexpected error occurred: {}", err);
+    }
 }

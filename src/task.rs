@@ -1,3 +1,4 @@
+use super::StdError;
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -34,31 +35,31 @@ impl TaskBuilder {
         self.subtask_count += 1;
     }
 
-    pub fn build(self) -> Task {
+    pub fn build(self) -> Result<Task, Box<dyn StdError>> {
         // create input dir
-        fs::create_dir(self.input_dir_path.as_path()).unwrap();
+        fs::create_dir(self.input_dir_path.as_path())?;
         // save JS file
-        let mut f = fs::File::create(self.input_dir_path.join(&self.js_name)).unwrap();
-        f.write_all(FLITE_JS).unwrap();
+        let mut f = fs::File::create(self.input_dir_path.join(&self.js_name))?;
+        f.write_all(FLITE_JS)?;
         // save WASM file
-        let mut f = fs::File::create(self.input_dir_path.join(&self.wasm_name)).unwrap();
-        f.write_all(FLITE_WASM).unwrap();
+        let mut f = fs::File::create(self.input_dir_path.join(&self.wasm_name))?;
+        f.write_all(FLITE_WASM)?;
         // create output dir
-        fs::create_dir(self.output_dir_path.as_path()).unwrap();
+        fs::create_dir(self.output_dir_path.as_path())?;
 
         let mut subtasks_map = Map::new();
         let mut expected_output_paths = VecDeque::new();
 
         for (subtask_name, subtask_data) in self.subtasks {
             // create input subtask dir
-            fs::create_dir(self.input_dir_path.join(&subtask_name)).unwrap();
+            fs::create_dir(self.input_dir_path.join(&subtask_name))?;
             // create output subtask dir
-            fs::create_dir(self.output_dir_path.join(&subtask_name)).unwrap();
+            fs::create_dir(self.output_dir_path.join(&subtask_name))?;
             // save input data file
             let input_name = "in.txt";
-            let mut f = fs::File::create(self.input_dir_path.join(&subtask_name).join(&input_name))
-                .unwrap();
-            f.write_all(subtask_data.as_bytes()).unwrap();
+            let mut f =
+                fs::File::create(self.input_dir_path.join(&subtask_name).join(&input_name))?;
+            f.write_all(subtask_data.as_bytes())?;
 
             let output_name = "in.wav";
             expected_output_paths
@@ -73,23 +74,27 @@ impl TaskBuilder {
             );
         }
 
-        Task {
-            json: json!({
-                "type": "wasm",
-                "name": "g_flite",
-                "bid": 1,
-                "subtask_timeout": "00:10:00",
-                "timeout": "00:10:00",
-                "options": {
-                    "js_name": self.js_name,
-                    "wasm_name": self.wasm_name,
-                    "input_dir": self.input_dir_path.to_str().unwrap(),
-                    "output_dir": self.output_dir_path.to_str().unwrap(),
-                    "subtasks": subtasks_map,
-                }
-            }),
+        let json = json!({
+            "type": "wasm",
+            "name": "g_flite",
+            "bid": 1,
+            "subtask_timeout": "00:10:00",
+            "timeout": "00:10:00",
+            "options": {
+                "js_name": self.js_name,
+                "wasm_name": self.wasm_name,
+                "input_dir": self.input_dir_path.to_string_lossy(),
+                "output_dir": self.output_dir_path.to_string_lossy(),
+                "subtasks": subtasks_map,
+            }
+        });
+
+        log::info!("Created json manifest for task: {}", json);
+
+        Ok(Task {
+            json,
             expected_output_paths,
-        }
+        })
     }
 }
 
