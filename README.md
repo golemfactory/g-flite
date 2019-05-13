@@ -2,7 +2,7 @@
 `g-flite` is a command-line utility which lets you run [flite](http://www.festvox.org/flite/)
 text-to-speech app on Golem Network.
 
-![g_flite GIF demo](https://imgur.com/a/ZdRVMgt)
+![g_flite GIF demo](http://i.imgur.com/Ji1CdCN.gif)
 
 __Note that `g-flite` currently requires that you have Golem instance running on the same machine
 and only testnet is currently supported due to the fact that
