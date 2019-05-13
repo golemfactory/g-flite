@@ -254,10 +254,10 @@ fn main() {
 
     let datadir = value_t!(matches.value_of("datadir"), path::PathBuf)
         .unwrap_or_else(|_| match ProjectDirs::from("", "", "golem") {
-            Some(project_dirs) => project_dirs.data_dir().join("default"),
-            None => {
-                panic!("Couldn't lock on to user standard libs. Are you running a supported OS?")
-            }
+            Some(project_dirs) => project_dirs.data_local_dir().join("default"),
+            None => panic!(
+                "No standard project app data dirs available. Are you running a supported OS?"
+            ),
         })
         .join("rinkeby");
 

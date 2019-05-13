@@ -63,11 +63,16 @@ $ g_flite some_text_input.txt some_speech_output.wav
 Note that it is required to specify the name of the output file. All of this assumes that you
 have your Golem installed using the default settings
 
-| Setting     | Default value       |
-| ----------- | ------------------- |
-| datadir     | $HOME/golem/datadir |
-| RPC address | 127.0.0.1           |
-| RPC port    | 61000               |
+| Setting     | Default value                 |
+| ----------- | ----------------------------- |
+| datadir     | `$APP_DATA_DIR/golem/default` |
+| RPC address | 127.0.0.1                     |
+| RPC port    | 61000                         |
+
+`$APP_DATA_DIR` is platform specific:
+* on Linux will usually refer to `$HOME/.local/share/<project_path>`
+* on Mac will usually refer to `$HOME/Library/Application Support/<project_path>`
+* on Windows will usually refer to `{FOLDERID_LocalAppData}/<project_path>/data`
 
 If any of the above information is not correct for your Golem configuration, you can
 adjust them directly in the command-line as follows
