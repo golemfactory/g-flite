@@ -1,6 +1,6 @@
 use super::StdError;
 use serde_json::{json, Map, Value};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ pub struct TaskBuilder {
     input_dir_path: PathBuf,
     output_dir_path: PathBuf,
     subtask_count: usize,
-    subtasks: HashMap<String, String>,
+    subtasks: BTreeMap<String, String>,
 }
 
 impl TaskBuilder {
@@ -25,7 +25,7 @@ impl TaskBuilder {
             input_dir_path: workspace.as_ref().join("in"),
             output_dir_path: workspace.as_ref().join("out"),
             subtask_count: 0,
-            subtasks: HashMap::new(),
+            subtasks: BTreeMap::new(),
         }
     }
 
