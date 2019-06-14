@@ -15,9 +15,9 @@ log = "0.4.6"
 env_logger = "0.6.1"
 failure="0.1.5"
 directories = "1.0.2"
-golem-rpc-api = { git="https://github.com/golemfactory/golem-client" }
-actix-wamp = { git="https://github.com/golemfactory/golem-client" }
-wamp-derive = { git="https://github.com/golemfactory/golem-client" }
+golem-rpc-api = { git="https://github.com/golemfactory/golem-client", rev="5cac9e0" }
+actix-wamp = { git="https://github.com/golemfactory/golem-client", rev="5cac9e0" }
+wamp-derive = { git="https://github.com/golemfactory/golem-client", rev="5cac9e0" }
 hound = { git="https://github.com/kubkon/hound" }
 
 [[bin]]
