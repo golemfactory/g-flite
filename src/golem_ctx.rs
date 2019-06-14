@@ -1,4 +1,4 @@
-pub use failure::Error;
+use crate::Result;
 use std::path::PathBuf;
 
 pub struct GolemCtx {
@@ -9,17 +9,18 @@ pub struct GolemCtx {
 impl GolemCtx {
     pub fn connect_to_app(
         &mut self,
-    ) -> Result<(actix::SystemRunner, impl actix_wamp::RpcEndpoint + Clone), Error> {
+    ) -> Result<(actix::SystemRunner, impl actix_wamp::RpcEndpoint + Clone)> {
         let mut sys = actix::System::new("golemcli");
 
         let data_dir = self.data_dir.clone();
 
-        let auth_method =
-            actix_wamp::challenge_response_auth(move |auth_id| -> Result<_, std::io::Error> {
+        let auth_method = actix_wamp::challenge_response_auth(
+            move |auth_id| -> std::result::Result<_, std::io::Error> {
                 let secret_file_path = data_dir.join(format!("crossbar/secrets/{}.tck", auth_id));
                 log::debug!("reading secret from: {}", secret_file_path.display());
                 Ok(std::fs::read(secret_file_path)?)
-            });
+            },
+        );
 
         let (address, port) = &self.rpc_addr;
 

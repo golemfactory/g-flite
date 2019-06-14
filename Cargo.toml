@@ -10,14 +10,14 @@ serde = { version="1.0.91" }
 serde_json = "1.0.39"
 indicatif = "0.11.0"
 console = ">=0.7.1, <1.0.0"
-actix = "0.8.1"
+actix = "0.8.3"
 log = "0.4.6"
 env_logger = "0.6.1"
 failure="0.1.5"
 directories = "1.0.2"
-golem-rpc-api = { git="https://github.com/golemfactory/golem-client", rev="5cac9e0" }
-actix-wamp = { git="https://github.com/golemfactory/golem-client", rev="5cac9e0" }
-wamp-derive = { git="https://github.com/golemfactory/golem-client", rev="5cac9e0" }
+actix-wamp = { git="https://github.com/golemfactory/golem-client", tag="v0.1.1" }
+golem-rpc-api = { git="https://github.com/golemfactory/golem-client", tag="v0.1.1" }
+golem-rpc-macros = { git="https://github.com/golemfactory/golem-client", tag="v0.1.1" }
 hound = { git="https://github.com/kubkon/hound" }
 
 [[bin]]
