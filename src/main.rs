@@ -1,5 +1,8 @@
+mod error;
 mod golem_ctx;
 mod task;
+
+pub type Result<T> = std::result::Result<T, error::Error>;
 
 use clap::{value_t, App, Arg};
 use console::style;
@@ -22,7 +25,7 @@ static CLIP: &str = "🔗  ";
 static PAPER: &str = "📃  ";
 static HOURGLASS: &str = "⌛  ";
 
-fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>, Box<dyn StdError>> {
+fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>> {
     let mut reader = fs::File::open(textfile)?;
     let mut contents = String::new();
     reader.read_to_string(&mut contents)?;
@@ -82,7 +85,7 @@ fn run_on_golem<S: AsRef<path::Path>>(
     datadir: S,
     address: &str,
     port: u16,
-) -> Result<task::Task, Box<dyn StdError>> {
+) -> Result<task::Task> {
     println!(
         "{} {}Sending task to Golem...",
         style("[2/4]").bold().dim(),
@@ -140,7 +143,6 @@ fn run_on_golem<S: AsRef<path::Path>>(
 
         let progress = task_info
             .progress
-            .as_f64()
             .expect("could extract progress from Golem task")
             * 100.0;
 
@@ -161,7 +163,7 @@ fn run_on_golem<S: AsRef<path::Path>>(
     Ok(task)
 }
 
-fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<(), Box<dyn StdError>> {
+fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<()> {
     let first = task
         .expected_output_paths
         .pop_front()

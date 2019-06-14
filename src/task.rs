@@ -1,4 +1,5 @@
-use super::StdError;
+use crate::Result;
+
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
@@ -35,7 +36,7 @@ impl TaskBuilder {
         self.subtask_count += 1;
     }
 
-    pub fn build(self) -> Result<Task, Box<dyn StdError>> {
+    pub fn build(self) -> Result<Task> {
         // create input dir
         fs::create_dir(self.input_dir_path.as_path())?;
         // save JS file
