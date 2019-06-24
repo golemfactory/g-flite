@@ -1,5 +1,4 @@
 mod error;
-mod golem_ctx;
 mod task;
 
 pub type Result<T> = std::result::Result<T, error::Error>;
@@ -110,16 +109,18 @@ fn run_on_golem<S: AsRef<path::Path>>(
 
     let task = task_builder.build()?;
 
-    // send to Golem
-    let mut ctx = golem_ctx::GolemCtx {
-        rpc_addr: (address.into(), port),
-        data_dir: datadir.as_ref().into(),
-    };
+    // connect to Golem
+    let mut sys = actix::System::new("g-flite");
+    let endpoint = sys.block_on(golem_rpc_api::connect_to_app(
+        datadir.as_ref(),
+        Some(golem_rpc_api::Net::TestNet),
+        Some((address, port)),
+    ))?;
 
-    let (mut sys, endpoint) = ctx.connect_to_app()?;
-    let resp = sys
-        .block_on(endpoint.as_golem_comp().create_task(task.json.clone()))
-        .expect("could create a Golem task");
+    // TODO check if account is unlocked
+    // TODO check if terms are accepted
+
+    let resp = sys.block_on(endpoint.as_golem_comp().create_task(task.json.clone()))?;
     let task_id = resp.0.expect("could extract Golem task id");
 
     // wait
@@ -134,9 +135,7 @@ fn run_on_golem<S: AsRef<path::Path>>(
     let mut old_progress = 0.0;
 
     loop {
-        let resp = sys
-            .block_on(endpoint.as_golem_comp().get_task(task_id.clone()))
-            .expect("could poll for Golem task");
+        let resp = sys.block_on(endpoint.as_golem_comp().get_task(task_id.clone()))?;
         let task_info = resp.expect("could parse response from Golem");
 
         log::info!("Received task info from Golem: {:?}", task_info);
@@ -254,14 +253,14 @@ fn main() {
     let address = matches.value_of("address").unwrap_or("127.0.0.1");
     let port = value_t!(matches.value_of("port"), u16).unwrap_or(61000);
 
-    let datadir = value_t!(matches.value_of("datadir"), path::PathBuf)
-        .unwrap_or_else(|_| match ProjectDirs::from("", "", "golem") {
+    let datadir = value_t!(matches.value_of("datadir"), path::PathBuf).unwrap_or_else(|_| {
+        match ProjectDirs::from("", "", "golem") {
             Some(project_dirs) => project_dirs.data_local_dir().join("default"),
             None => panic!(
                 "No standard project app data dirs available. Are you running a supported OS?"
             ),
-        })
-        .join("rinkeby");
+        }
+    });
 
     if matches.is_present("verbose") {
         Builder::from_env(Env::default().default_filter_or("info")).init();
