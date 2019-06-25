@@ -38,33 +38,77 @@ impl TaskBuilder {
 
     pub fn build(self) -> Result<Task> {
         // create input dir
-        fs::create_dir(self.input_dir_path.as_path())?;
+        fs::create_dir(self.input_dir_path.as_path()).map_err(|e| {
+            format!(
+                "creating directory '{}': {}",
+                self.input_dir_path.to_string_lossy(),
+                e
+            )
+        })?;
         // save JS file
-        let mut f = fs::File::create(self.input_dir_path.join(&self.js_name))?;
-        f.write_all(FLITE_JS)?;
+        let js_filename = self.input_dir_path.join(&self.js_name);
+        fs::File::create(&js_filename)
+            .and_then(|mut f| f.write_all(FLITE_JS))
+            .map_err(|e| format!("writing to file '{}': {}", js_filename.to_string_lossy(), e))?;
+
         // save WASM file
-        let mut f = fs::File::create(self.input_dir_path.join(&self.wasm_name))?;
-        f.write_all(FLITE_WASM)?;
+        let wasm_filename = self.input_dir_path.join(&self.wasm_name);
+        fs::File::create(&wasm_filename)
+            .and_then(|mut f| f.write_all(FLITE_WASM))
+            .map_err(|e| {
+                format!(
+                    "writing to file '{}': {}",
+                    wasm_filename.to_string_lossy(),
+                    e
+                )
+            })?;
+
         // create output dir
-        fs::create_dir(self.output_dir_path.as_path())?;
+        fs::create_dir(self.output_dir_path.as_path()).map_err(|e| {
+            format!(
+                "creating directory '{}': {}",
+                self.output_dir_path.to_string_lossy(),
+                e
+            )
+        })?;
 
         let mut subtasks_map = Map::new();
         let mut expected_output_paths = VecDeque::new();
 
         for (subtask_name, subtask_data) in self.subtasks {
             // create input subtask dir
-            fs::create_dir(self.input_dir_path.join(&subtask_name))?;
+            let input_dir_path = self.input_dir_path.join(&subtask_name);
+            fs::create_dir(&input_dir_path).map_err(|e| {
+                format!(
+                    "creating directory '{}': {}",
+                    input_dir_path.to_string_lossy(),
+                    e
+                )
+            })?;
             // create output subtask dir
-            fs::create_dir(self.output_dir_path.join(&subtask_name))?;
+            let output_dir_path = self.output_dir_path.join(&subtask_name);
+            fs::create_dir(&output_dir_path).map_err(|e| {
+                format!(
+                    "creating directory '{}': {}",
+                    output_dir_path.to_string_lossy(),
+                    e
+                )
+            })?;
             // save input data file
             let input_name = "in.txt";
-            let mut f =
-                fs::File::create(self.input_dir_path.join(&subtask_name).join(&input_name))?;
-            f.write_all(subtask_data.as_bytes())?;
+            let input_filename = input_dir_path.join(&input_name);
+            fs::File::create(&input_filename)
+                .and_then(|mut f| f.write_all(subtask_data.as_bytes()))
+                .map_err(|e| {
+                    format!(
+                        "writing to file '{}': {}",
+                        input_filename.to_string_lossy(),
+                        e
+                    )
+                })?;
 
             let output_name = "in.wav";
-            expected_output_paths
-                .push_back(self.output_dir_path.join(&subtask_name).join(&output_name));
+            expected_output_paths.push_back(output_dir_path.join(&output_name));
 
             subtasks_map.insert(
                 subtask_name,
