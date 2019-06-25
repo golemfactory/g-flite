@@ -7,14 +7,15 @@ use clap::{value_t, App, Arg};
 use console::style;
 use directories::ProjectDirs;
 use env_logger::{Builder, Env};
+use error::Error;
 use golem_rpc_api::comp::{self, AsGolemComp};
 use hound;
 use indicatif::ProgressBar;
 use std::env;
-pub use std::error::Error as StdError;
 use std::fs;
 use std::io::Read;
 use std::path;
+use std::process;
 use std::time::SystemTime;
 
 const DEFAULT_NUM_SUBTASKS: usize = 6;
@@ -121,7 +122,9 @@ fn run_on_golem<S: AsRef<path::Path>>(
     // TODO check if terms are accepted
 
     let resp = sys.block_on(endpoint.as_golem_comp().create_task(task.json.clone()))?;
-    let task_id = resp.0.expect("could extract Golem task id");
+    let task_id = resp
+        .0
+        .ok_or(Error::Other("couldn't extract Golem task's id".to_owned()))?;
 
     // wait
     println!(
@@ -136,13 +139,15 @@ fn run_on_golem<S: AsRef<path::Path>>(
 
     loop {
         let resp = sys.block_on(endpoint.as_golem_comp().get_task(task_id.clone()))?;
-        let task_info = resp.expect("could parse response from Golem");
+        let task_info = resp.ok_or(Error::Other(
+            "couldn't parse task info from Golem".to_string(),
+        ))?;
 
         log::info!("Received task info from Golem: {:?}", task_info);
 
         let progress = task_info
             .progress
-            .expect("could extract progress from Golem task")
+            .ok_or(Error::Other("couldn't read task's progress".to_owned()))?
             * 100.0;
 
         if progress != old_progress {
@@ -152,6 +157,13 @@ fn run_on_golem<S: AsRef<path::Path>>(
         }
 
         match task_info.status {
+            comp::TaskStatus::Restarted => {
+                // reset progress bar
+                bar.inc(0);
+                old_progress = 0.0;
+            }
+            comp::TaskStatus::Aborted => return Err(Error::Other("task aborted".to_owned())),
+            comp::TaskStatus::Timeout => return Err(Error::Other("task timed out".to_owned())),
             comp::TaskStatus::Finished => break,
             _ => {}
         }
@@ -166,7 +178,7 @@ fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<()> {
     let first = task
         .expected_output_paths
         .pop_front()
-        .expect("at least one Golem subtask received");
+        .ok_or(Error::Other("No results received from Golem".to_owned()))?;
 
     println!(
         "{} {}Combining output into '{}'...",
@@ -256,9 +268,12 @@ fn main() {
     let datadir = value_t!(matches.value_of("datadir"), path::PathBuf).unwrap_or_else(|_| {
         match ProjectDirs::from("", "", "golem") {
             Some(project_dirs) => project_dirs.data_local_dir().join("default"),
-            None => panic!(
-                "No standard project app data dirs available. Are you running a supported OS?"
-            ),
+            None => {
+                eprintln!(
+                    "No standard project app data dirs available. Are you running a supported OS?"
+                );
+                process::exit(1);
+            }
         }
     });
 
@@ -270,6 +285,7 @@ fn main() {
         .and_then(|chunks| run_on_golem(chunks, datadir, address, port))
         .and_then(|task| combine_wave(task, matches.value_of("WAVFILE").unwrap()))
     {
-        eprintln!("Unexpected error occurred: {}", err);
+        eprintln!("An error occurred: {}", err);
+        process::exit(1);
     }
 }
