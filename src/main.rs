@@ -1,13 +1,11 @@
-mod error;
 mod task;
 
-pub type Result<T> = std::result::Result<T, error::Error>;
+pub type Result<T> = std::result::Result<T, String>;
 
 use clap::{value_t, App, Arg};
 use console::style;
 use directories::ProjectDirs;
 use env_logger::{Builder, Env};
-use error::Error;
 use golem_rpc_api::comp::{self, AsGolemComp};
 use hound;
 use indicatif::ProgressBar;
@@ -26,9 +24,10 @@ static PAPER: &str = "📃  ";
 static HOURGLASS: &str = "⌛  ";
 
 fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>> {
-    let mut reader = fs::File::open(textfile)?;
     let mut contents = String::new();
-    reader.read_to_string(&mut contents)?;
+    fs::File::open(textfile)
+        .and_then(|mut f| f.read_to_string(&mut contents))
+        .map_err(|e| format!("reading from '{}': {}", textfile, e))?;
 
     let word_count = contents.split_whitespace().count();
 
@@ -94,10 +93,18 @@ fn run_on_golem<S: AsRef<path::Path>>(
 
     // prepare workspace
     let mut workspace = env::temp_dir();
-    let time_now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+    let time_now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?;
     let subdir = format!("g_flite_{}", time_now.as_secs());
     workspace.push(subdir);
-    fs::create_dir(workspace.as_path())?;
+    fs::create_dir(workspace.as_path()).map_err(|e| {
+        format!(
+            "creating directory '{}': {}",
+            workspace.to_string_lossy(),
+            e
+        )
+    })?;
 
     log::info!("Will prepare task in '{:?}'", workspace);
 
@@ -112,19 +119,30 @@ fn run_on_golem<S: AsRef<path::Path>>(
 
     // connect to Golem
     let mut sys = actix::System::new("g-flite");
-    let endpoint = sys.block_on(golem_rpc_api::connect_to_app(
-        datadir.as_ref(),
-        Some(golem_rpc_api::Net::TestNet),
-        Some((address, port)),
-    ))?;
+    let endpoint = sys
+        .block_on(golem_rpc_api::connect_to_app(
+            datadir.as_ref(),
+            Some(golem_rpc_api::Net::TestNet),
+            Some((address, port)),
+        ))
+        .map_err(|e| {
+            format!(
+                "connecting to Golem with datadir='{}', net='{}', address='{}:{}': {}",
+                datadir.as_ref().to_string_lossy(),
+                golem_rpc_api::Net::TestNet,
+                address,
+                port,
+                e
+            )
+        })?;
 
     // TODO check if account is unlocked
     // TODO check if terms are accepted
 
-    let resp = sys.block_on(endpoint.as_golem_comp().create_task(task.json.clone()))?;
-    let task_id = resp
-        .0
-        .ok_or(Error::Other("couldn't extract Golem task's id".to_owned()))?;
+    let resp = sys
+        .block_on(endpoint.as_golem_comp().create_task(task.json.clone()))
+        .map_err(|e| format!("creating Golem task '{:#?}': {}", task.json, e))?;
+    let task_id = resp.0.ok_or("extracting Golem task's id".to_owned())?;
 
     // wait
     println!(
@@ -138,16 +156,16 @@ fn run_on_golem<S: AsRef<path::Path>>(
     let mut old_progress = 0.0;
 
     loop {
-        let resp = sys.block_on(endpoint.as_golem_comp().get_task(task_id.clone()))?;
-        let task_info = resp.ok_or(Error::Other(
-            "couldn't parse task info from Golem".to_string(),
-        ))?;
+        let resp = sys
+            .block_on(endpoint.as_golem_comp().get_task(task_id.clone()))
+            .map_err(|e| format!("polling for task '{:#?}': {}", task.json, e))?;
+        let task_info = resp.ok_or("parsing task info from Golem".to_owned())?;
 
         log::info!("Received task info from Golem: {:?}", task_info);
 
         let progress = task_info
             .progress
-            .ok_or(Error::Other("couldn't read task's progress".to_owned()))?
+            .ok_or("reading task's progress".to_owned())?
             * 100.0;
 
         if progress != old_progress {
@@ -162,8 +180,12 @@ fn run_on_golem<S: AsRef<path::Path>>(
                 bar.inc(0);
                 old_progress = 0.0;
             }
-            comp::TaskStatus::Aborted => return Err(Error::Other("task aborted".to_owned())),
-            comp::TaskStatus::Timeout => return Err(Error::Other("task timed out".to_owned())),
+            comp::TaskStatus::Aborted => {
+                return Err("waiting for task to complete: task aborted".to_owned())
+            }
+            comp::TaskStatus::Timeout => {
+                return Err("waiting for task to complete: task timed out".to_owned())
+            }
             comp::TaskStatus::Finished => break,
             _ => {}
         }
@@ -178,7 +200,7 @@ fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<()> {
     let first = task
         .expected_output_paths
         .pop_front()
-        .ok_or(Error::Other("No results received from Golem".to_owned()))?;
+        .ok_or("combining results: no results received from Golem".to_owned())?;
 
     println!(
         "{} {}Combining output into '{}'...",
@@ -187,20 +209,44 @@ fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<()> {
         output_wavefile
     );
 
-    let reader = hound::WavReader::open(first)?;
+    let reader = hound::WavReader::open(&first)
+        .map_err(|e| format!("opening WAVE file '{}': {}", first.to_string_lossy(), e))?;
     let spec = reader.spec();
 
     log::info!("Using Wav spec: {:?}", spec);
 
-    let mut writer = hound::WavWriter::create(output_wavefile, spec)?;
+    let mut writer = hound::WavWriter::create(output_wavefile, spec)
+        .map_err(|e| format!("creating WAVE file '{}': {}", output_wavefile, e))?;
     for sample in reader.into_samples::<i16>() {
-        writer.write_sample(sample?)?;
+        sample
+            .and_then(|sample| writer.write_sample(sample))
+            .map_err(|e| {
+                format!(
+                    "reading audio sample from file '{}': {}",
+                    first.to_string_lossy(),
+                    e
+                )
+            })?;
     }
 
     for expected_file in task.expected_output_paths {
-        let reader = hound::WavReader::open(expected_file)?;
+        let reader = hound::WavReader::open(&expected_file).map_err(|e| {
+            format!(
+                "opening WAVE file '{}': {}",
+                expected_file.to_string_lossy(),
+                e
+            )
+        })?;
         for sample in reader.into_samples::<i16>() {
-            writer.write_sample(sample?)?;
+            sample
+                .and_then(|sample| writer.write_sample(sample))
+                .map_err(|e| {
+                    format!(
+                        "reading audio sample from file '{}': {}",
+                        expected_file.to_string_lossy(),
+                        e
+                    )
+                })?;
         }
     }
 
@@ -285,7 +331,7 @@ fn main() {
         .and_then(|chunks| run_on_golem(chunks, datadir, address, port))
         .and_then(|task| combine_wave(task, matches.value_of("WAVFILE").unwrap()))
     {
-        eprintln!("An error occurred: {}", err);
+        eprintln!("An error occurred while {}", err);
         process::exit(1);
     }
 }
