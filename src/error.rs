@@ -16,6 +16,8 @@ pub enum Error {
     ActixWampError(#[cause] actix_wamp::Error),
     #[fail(display = "{}", _0)]
     HoundError(#[cause] hound::Error),
+    #[fail(display = "{}", _0)]
+    Other(String),
 }
 
 impl From<io::Error> for Error {
