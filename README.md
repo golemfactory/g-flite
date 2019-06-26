@@ -1,4 +1,9 @@
 # g-flite
+[![travis-build-status]][travis]
+
+[travis-build-status]: https://travis-ci.org/golemfactory/g-flite.svg?branch=master
+[travis]: https://travis-ci.org/golemfactory/g-flite
+
 `g-flite` is a command-line utility which lets you run [flite](http://www.festvox.org/flite/)
 text-to-speech app on Golem Network.
 
