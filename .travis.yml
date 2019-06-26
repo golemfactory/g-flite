@@ -11,9 +11,6 @@ addons:
     - libssl-dev
 cache: cargo
 dist: xenial
-branches:
-  only:
-    - master
 before_cache:
 - rm -rf /home/travis/.cargo/registry
 before_script:
