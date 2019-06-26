@@ -18,14 +18,11 @@ You can grab a precompiled version of the program for each OS, Linux, Mac, and W
 
 ### Building from source
 If you wish however, you can also build the program from source. To do this, you'll first need
-to clone the repo. Note that the actual WASM binary of the `flite` app is stored using Git-LFS
-so you need to take extra care when cloning the repo
+to clone the repo.
 
 ```
 $ git clone --depth 50 https://github.com/golemfactory/g-flite
 $ cd g-flite
-$ git lfs install
-$ git lfs pull
 ```
 
 Afterwards, you need to ensure you have Rust installed in version at least `1.34.0`. A good place
