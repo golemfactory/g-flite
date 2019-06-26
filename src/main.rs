@@ -255,7 +255,7 @@ fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<()> {
 
 fn main() {
     let matches = App::new("g_flite")
-        .version("0.1.0")
+        .version("0.2.0")
         .author("Golem RnD Team <contact@golem.network>")
         .about("flite, a text-to-speech program, distributed over Golem network")
         .arg(

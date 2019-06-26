@@ -1,6 +1,6 @@
 [package]
 name = "g-flite"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Jakub Konka <jakub.konka@golem.network>"]
 edition = "2018"
 
