@@ -1,5 +1,4 @@
-# g-flite
-[![travis-build-status]][travis]
+# g-flite [![travis-build-status]][travis]
 
 [travis-build-status]: https://travis-ci.org/golemfactory/g-flite.svg?branch=master
 [travis]: https://travis-ci.org/golemfactory/g-flite
