@@ -127,3 +127,4 @@ please submit them [in our issue tracker](https://github.com/golemfactory/g-flit
 ## License
 Licensed under [GNU General Public License v3.0](LICENSE) with the exception of `flite` WASM binary
 which is licensed under [BSD-like License](LICENSE.flite).
+
