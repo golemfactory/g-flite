@@ -1,0 +1,62 @@
+language: rust
+os:
+- linux
+- osx
+- windows
+rust:
+- stable
+addons:
+  apt:
+    packages:
+    - libssl-dev
+cache: cargo
+dist: xenial
+branches:
+  only:
+    - master
+before_cache:
+- rm -rf /home/travis/.cargo/registry
+before_script:
+- |
+  if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    wget https://s3-eu-west-1.amazonaws.com/unlimited.golem.network/openssl/buildenv-x64-windows-static.zip
+    7z x -obuildenv buildenv-x64-windows-static.zip
+    export OPENSSL_DIR=$PWD/buildenv
+    export OPENSSL_STATIC=1
+  fi
+- echo TAG=$TRAVIS_TAG, TRAVIS_OS_NAME=$TRAVIS_OS_NAME
+- rustup toolchain install stable
+- rustup component add rustfmt --toolchain stable
+- rustup component list --toolchain stable
+- rustup show
+script:
+- cargo +stable fmt --all -- --check
+- cargo build --release
+- cargo test --all
+before_deploy: |
+  TARGET_DIR=releases/g-flite-${TRAVIS_OS_NAME}-${TRAVIS_TAG}
+  mkdir -p "$TARGET_DIR"
+  if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    cp target/release/g_flite.exe "$TARGET_DIR/"
+    strip "$TARGET_DIR/g_flite.exe"
+  else
+    cp target/release/g_flite "$TARGET_DIR/"
+    strip "$TARGET_DIR/g_flite"
+  fi
+  ls -la "$TARGET_DIR"
+  if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    (cd "$TARGET_DIR" && 7z a "../g-flite-${TRAVIS_OS_NAME}-${TRAVIS_TAG}.zip" * )
+  else
+    (cd releases && tar czvf "g-flite-${TRAVIS_OS_NAME}-${TRAVIS_TAG}.tar.gz" "g-flite-${TRAVIS_OS_NAME}-${TRAVIS_TAG}")
+  fi
+deploy:
+  provider: releases
+  api_key:
+    secure: npiBW7UjUbQJIje7idtDr2bqnI7zWL7NAUA3qkxXwX0oeQtaRhT1FiFsINC4BFtX3qpF6++RKWjdA27PxItfcfiCLs3CsBd2GduM9EpirZYOzu8MlBzMt3hRpkVQfpxYr/4KyyEDGptaKap5VguM96XdNlU7Hgx7YbkfrU9nZpBRoRRv8vkcPjGhZb2FT/2NE8JOsyNxSvKprrvwUD1z1fIIooLZYortBgvr/Hn7JSi+7EaPv/hDIXmReeOfQgBXW6JimLvZO9hj96iDWKGPwxyl1dtCpBUzpi/64P/JbaXhY73EGx02tS89Kx0pxIgE2n2iH7p+h1371Yh3v+7pVYBiiRjEEDfifhORqp8EGg1IGnwhpLiNItjB6urmtlBoXU7IRzhZWwyLlcQ7iac2NNeTQxCBil2PQdeNBsB1llAL0RkbyMpE9nvm9GQbyLoDQ0Yi8m6rRwx9Gv98uoYPBARrPKxs4nadKbm/IvMA6F9Wo/H08m3Q59J0wIwgDWlzdCxZAJiCBZEVCLfh9B/YbV9VzR7EiyF1V7GKGaOeRvFBYo2Zy34E1w0RxGjPTj0qXordWNfjdpAJtGt28XPVkPGezuplYrz+5fIA+/bQYQ48VjFS8Pz2DUKgdwKsB8Fk4mUUH9sgv38LbwzawL7uZYNQOgwZLwvRSKmKUqNwNq0=
+  file_glob: true
+  file: releases/g-flite-*.*
+  skip_cleanup: true
+  on:
+    repo: golemfactory/g-flite
+    tags: true
+    
