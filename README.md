@@ -21,8 +21,8 @@ If you wish however, you can also build the program from source. To do this, you
 to clone the repo.
 
 ```
-$ git clone --depth 50 https://github.com/golemfactory/g-flite
-$ cd g-flite
+git clone --depth 50 https://github.com/golemfactory/g-flite
+cd g-flite
 ```
 
 Afterwards, you need to ensure you have Rust installed in version at least `1.34.0`. A good place
@@ -31,13 +31,13 @@ to get your hands on the latest Rust is [rustup website](https://rustup.rs/).
 With Rust installed on your OS, you then need to simply run from within `g-flite` dir
 
 ```
-$ cargo build
+cargo build
 ```
 
 for debug version, or
 
 ```
-$ cargo build --release
+cargo build --release
 ```
 
 for release version. Your program can then be found in
@@ -55,14 +55,25 @@ g-flite/target/release/g_flite
 for release version.
 
 ## Usage
-Typical usage should not differ much or at all from how you would use the original `flite` app
+Typical usage should not differ much or at all from how you would use the original `flite` app.
+So, in order to generate speech from some input text `some_text_input.txt` and save to a WAV file
+`some_speech_output.wav`, you would simply run it as
+
 
 ```
-$ g_flite some_text_input.txt some_speech_output.wav
+g_flite some_text_input.txt some_speech_output.wav
 ```
 
-Note that it is required to specify the name of the output file. All of this assumes that you
-have your Golem installed using the default settings
+Note that it is required to specify the name of the output file. To provide a more concrete example,
+let's take the "Moby Dick; Or, The Whale" by Herman Melville. Download the entire book in
+a text format [here](https://www.gutenberg.org/files/2701/2701-0.txt), and save it as `moby_dick.txt`.
+Then, you can convert the book to speech using `g-flite` by simply running
+
+```
+g_flite moby_dick.txt moby_dick.wav
+```
+
+All of this assumes that you have your Golem installed using the default settings
 
 | Setting     | Default value                 |
 | ----------- | ----------------------------- |
@@ -79,20 +90,20 @@ If any of the above information is not correct for your Golem configuration, you
 adjust them directly in the command-line as follows
 
 ```
-$ g_flite --address 127.0.0.1 --port 61000 --datadir /abs/path/to/golem/datadir some_text_input.txt some_speech_output.wav
+g_flite --address 127.0.0.1 --port 61000 --datadir /abs/path/to/golem/datadir some_text_input.txt some_speech_output.wav
 ```
 
 Finally, by default `g-flite` will split your input text into 6 subtasks and compute them
 on Golem Network. You can also adjust this option in the command-line as follows
 
 ```
-$ g_flite --subtasks 2 some_text_input.txt some_speech_output.wav
+g_flite --subtasks 2 some_text_input.txt some_speech_output.wav
 ```
 
 All of this information can also be extracted from the command-line with the `-h` or `--help` flags
 
 ```
-$ g_flite -h
+g_flite -h
 
 g_flite 0.1.0
 Golem RnD Team <contact@golem.network>
