@@ -14,11 +14,15 @@ actix = "0.8.3"
 log = "0.4.6"
 env_logger = "0.6.1"
 failure="0.1.5"
-directories = "1.0.2"
+appdirs = "0.2"
 actix-wamp = { git="https://github.com/golemfactory/golem-client", tag="v0.1.3" }
 golem-rpc-api = { git="https://github.com/golemfactory/golem-client", tag="v0.1.3" }
 golem-rpc-macros = { git="https://github.com/golemfactory/golem-client", tag="v0.1.3" }
 hound = { git="https://github.com/kubkon/hound" }
+openssl = "0.10.20"
+
+[features]
+openssl_vendored = ["openssl/vendored"]
 
 [[bin]]
 name = "g_flite"

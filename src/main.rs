@@ -4,7 +4,6 @@ pub type Result<T> = std::result::Result<T, String>;
 
 use clap::{value_t, App, Arg};
 use console::style;
-use directories::ProjectDirs;
 use env_logger::{Builder, Env};
 use golem_rpc_api::comp::{self, AsGolemComp};
 use hound;
@@ -312,9 +311,9 @@ fn main() {
     let port = value_t!(matches.value_of("port"), u16).unwrap_or(61000);
 
     let datadir = value_t!(matches.value_of("datadir"), path::PathBuf).unwrap_or_else(|_| {
-        match ProjectDirs::from("", "", "golem") {
-            Some(project_dirs) => project_dirs.data_local_dir().join("default"),
-            None => {
+        match appdirs::user_data_dir(Some("golem"), Some("golem"), false) {
+            Ok(data_dir) => data_dir.join("default"),
+            Err(_) => {
                 eprintln!(
                     "No standard project app data dirs available. Are you running a supported OS?"
                 );

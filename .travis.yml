@@ -8,7 +8,7 @@ rust:
 addons:
   apt:
     packages:
-    - libssl-dev
+      - libssl-dev
 cache: cargo
 dist: xenial
 before_cache:
@@ -28,7 +28,12 @@ before_script:
 - rustup show
 script:
 - cargo +stable fmt --all -- --check
-- cargo build --release
+- |
+  if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    cargo build --release
+  else
+    cargo build --release --features openssl_vendored
+  fi
 - cargo test --all
 before_deploy: |
   TARGET_DIR=releases/g-flite-${TRAVIS_OS_NAME}-${TRAVIS_TAG}
@@ -53,6 +58,7 @@ deploy:
   file_glob: true
   file: releases/g-flite-*.*
   skip_cleanup: true
+  draft: true
   on:
     repo: golemfactory/g-flite
     tags: true
