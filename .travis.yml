@@ -5,12 +5,14 @@ os:
 - windows
 rust:
 - stable
+dist: xenial
 addons:
   apt:
     packages:
       - libssl-dev
-cache: cargo
-dist: xenial
+cache:
+  directories:
+    - /home/travis/.cargo
 before_cache:
 - rm -rf /home/travis/.cargo/registry
 before_script:
