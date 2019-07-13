@@ -2,7 +2,6 @@ mod task;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-use clap::{value_t, App, Arg};
 use console::style;
 use env_logger::{Builder, Env};
 use golem_rpc_api::comp::{self, AsGolemComp};
@@ -14,13 +13,48 @@ use std::io::Read;
 use std::path;
 use std::process;
 use std::time::SystemTime;
-
-const DEFAULT_NUM_SUBTASKS: usize = 6;
+use structopt::StructOpt;
 
 static TRUCK: &str = "🚚  ";
 static CLIP: &str = "🔗  ";
 static PAPER: &str = "📃  ";
 static HOURGLASS: &str = "⌛  ";
+
+#[derive(Debug, StructOpt)]
+#[structopt(
+    name = "g_flite",
+    author = "Golem RnD Team <contact@golem.network>",
+    about = "flite, a text-to-speech program, distributed over Golem network"
+)]
+struct Opt {
+    /// Input text file
+    #[structopt(parse(from_os_str))]
+    input: path::PathBuf,
+
+    /// Output WAV file
+    #[structopt(parse(from_os_str))]
+    output: path::PathBuf,
+
+    /// Sets number of Golem subtasks
+    #[structopt(long = "subtasks", default_value = "6")]
+    subtasks: usize,
+
+    /// Sets path to Golem datadir
+    #[structopt(long = "datadir", parse(from_os_str))]
+    datadir: Option<path::PathBuf>,
+
+    /// Sets RPC address to Golem instance
+    #[structopt(long = "address", default_value = "127.0.0.1")]
+    address: String,
+
+    /// Sets RPC port to Golem instance
+    #[structopt(long = "port", default_value = "61000")]
+    port: u16,
+
+    /// Turns verbose logging on
+    #[structopt(short = "v", long = "verbose")]
+    verbose: bool,
+}
 
 fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>> {
     let mut contents = String::new();
@@ -253,64 +287,13 @@ fn combine_wave(mut task: task::Task, output_wavefile: &str) -> Result<()> {
 }
 
 fn main() {
-    let matches = App::new("g_flite")
-        .version("0.2.0")
-        .author("Golem RnD Team <contact@golem.network>")
-        .about("flite, a text-to-speech program, distributed over Golem network")
-        .arg(
-            Arg::with_name("TEXTFILE")
-                .help("Input text file")
-                .required(true)
-                .index(1),
-        )
-        .arg(
-            Arg::with_name("WAVFILE")
-                .help("Output WAV file")
-                .required(true)
-                .index(2),
-        )
-        .arg(
-            Arg::with_name("subtasks")
-                .long("subtasks")
-                .value_name("NUM")
-                .help("Sets number of Golem subtasks (defaults to 6)")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("datadir")
-                .long("datadir")
-                .value_name("DATADIR")
-                .help("Sets path to Golem datadir")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("address")
-                .long("address")
-                .value_name("ADDRESS")
-                .help("Sets RPC address to Golem instance")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("port")
-                .long("port")
-                .value_name("PORT")
-                .help("Sets RPC port to Golem instance")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("verbose")
-                .long("verbose")
-                .short("v")
-                .help("Turns verbose logging on")
-                .takes_value(false),
-        )
-        .get_matches();
+    let opt = Opt::from_args();
 
-    let subtasks = value_t!(matches.value_of("subtasks"), usize).unwrap_or(DEFAULT_NUM_SUBTASKS);
-    let address = matches.value_of("address").unwrap_or("127.0.0.1");
-    let port = value_t!(matches.value_of("port"), u16).unwrap_or(61000);
-
-    let datadir = value_t!(matches.value_of("datadir"), path::PathBuf).unwrap_or_else(|_| {
+    // unpack config args
+    let subtasks = opt.subtasks;
+    let address = opt.address;
+    let port = opt.port;
+    let datadir = opt.datadir.unwrap_or_else(|| {
         match appdirs::user_data_dir(Some("golem"), Some("golem"), false) {
             Ok(data_dir) => data_dir.join("default"),
             Err(_) => {
@@ -322,13 +305,36 @@ fn main() {
         }
     });
 
-    if matches.is_present("verbose") {
+    if opt.verbose {
         Builder::from_env(Env::default().default_filter_or("info")).init();
     }
 
-    if let Err(err) = split_textfile(matches.value_of("TEXTFILE").unwrap(), subtasks)
-        .and_then(|chunks| run_on_golem(chunks, datadir, address, port))
-        .and_then(|task| combine_wave(task, matches.value_of("WAVFILE").unwrap()))
+    // verify input exists
+    let input = opt.input.to_string_lossy().to_owned();
+    if !opt.input.is_file() {
+        eprintln!(
+            "Input file '{}' doesn't exist. Did you make a typo anywhere?",
+            input
+        );
+        process::exit(1);
+    }
+
+    // verify output path excluding topmost file exists
+    if let Some(parent) = opt.output.parent() {
+        let parent_str = parent.to_string_lossy();
+        if !parent_str.is_empty() && !parent.exists() {
+            eprintln!(
+                "Output path '{}' doesn't exist. Did you make a type anywhere?",
+                parent_str,
+            );
+            process::exit(1);
+        }
+    }
+    let output = opt.output.to_string_lossy().to_owned();
+
+    if let Err(err) = split_textfile(&input, subtasks)
+        .and_then(|chunks| run_on_golem(chunks, datadir, &address, port))
+        .and_then(|task| combine_wave(task, &output))
     {
         eprintln!("An error occurred while {}", err);
         process::exit(1);
