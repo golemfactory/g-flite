@@ -1,4 +1,5 @@
 mod task;
+mod timeout;
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -14,6 +15,7 @@ use std::path;
 use std::process;
 use std::time::SystemTime;
 use structopt::StructOpt;
+use timeout::Timeout;
 
 static TRUCK: &str = "🚚  ";
 static CLIP: &str = "🔗  ";
@@ -39,6 +41,22 @@ struct Opt {
     #[structopt(long = "subtasks", default_value = "6")]
     subtasks: usize,
 
+    /// Sets bid value for Golem task
+    #[structopt(long = "bid", default_value = "1.0")]
+    bid: f64,
+
+    /// Sets Golem's task timeout value
+    #[structopt(long = "task_timeout", parse(try_from_str), default_value = "00:10:00")]
+    task_timeout: Timeout,
+
+    /// Sets Golem's subtask timeout value
+    #[structopt(
+        long = "subtask_timeout",
+        parse(try_from_str),
+        default_value = "00:10:00"
+    )]
+    subtask_timeout: Timeout,
+
     /// Sets path to Golem datadir
     #[structopt(long = "datadir", parse(from_os_str))]
     datadir: Option<path::PathBuf>,
@@ -54,6 +72,23 @@ struct Opt {
     /// Turns verbose logging on
     #[structopt(short = "v", long = "verbose")]
     verbose: bool,
+}
+
+#[derive(Debug)]
+pub struct GolemOpt {
+    bid: f64,
+    task_timeout: Timeout,
+    subtask_timeout: Timeout,
+}
+
+impl From<&Opt> for GolemOpt {
+    fn from(opt: &Opt) -> Self {
+        Self {
+            bid: opt.bid,
+            task_timeout: opt.task_timeout,
+            subtask_timeout: opt.subtask_timeout,
+        }
+    }
 }
 
 fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>> {
@@ -117,6 +152,7 @@ fn run_on_golem<S: AsRef<path::Path>>(
     datadir: S,
     address: &str,
     port: u16,
+    golem_opt: GolemOpt,
 ) -> Result<task::Task> {
     println!(
         "{} {}Sending task to Golem...",
@@ -142,7 +178,7 @@ fn run_on_golem<S: AsRef<path::Path>>(
     log::info!("Will prepare task in '{:?}'", workspace);
 
     // prepare Golem task
-    let mut task_builder = task::TaskBuilder::new(workspace);
+    let mut task_builder = task::TaskBuilder::new(workspace, golem_opt);
 
     for chunk in chunks {
         task_builder.add_subtask(chunk);
@@ -290,6 +326,7 @@ fn main() {
     let opt = Opt::from_args();
 
     // unpack config args
+    let golem_opt: GolemOpt = (&opt).into();
     let subtasks = opt.subtasks;
     let address = opt.address;
     let port = opt.port;
@@ -333,7 +370,7 @@ fn main() {
     let output = opt.output.to_string_lossy().to_owned();
 
     if let Err(err) = split_textfile(&input, subtasks)
-        .and_then(|chunks| run_on_golem(chunks, datadir, &address, port))
+        .and_then(|chunks| run_on_golem(chunks, datadir, &address, port, golem_opt))
         .and_then(|task| combine_wave(task, &output))
     {
         eprintln!("An error occurred while {}", err);
