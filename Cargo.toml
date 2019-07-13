@@ -20,6 +20,7 @@ golem-rpc-macros = { git="https://github.com/golemfactory/golem-client", tag="v0
 hound = { git="https://github.com/kubkon/hound" }
 openssl = "0.10.20"
 structopt = "0.2.18"
+chrono = "0.4.7"
 
 [features]
 openssl_vendored = ["openssl/vendored"]

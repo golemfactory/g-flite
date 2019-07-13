@@ -1,5 +1,4 @@
-use crate::Result;
-
+use super::{GolemOpt, Result};
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
@@ -10,6 +9,9 @@ const FLITE_JS: &[u8] = include_bytes!("../assets/flite.js");
 const FLITE_WASM: &[u8] = include_bytes!("../assets/flite.wasm");
 
 pub struct TaskBuilder {
+    bid: f64,
+    task_timeout: String,
+    subtask_timeout: String,
     js_name: String,
     wasm_name: String,
     input_dir_path: PathBuf,
@@ -19,8 +21,11 @@ pub struct TaskBuilder {
 }
 
 impl TaskBuilder {
-    pub fn new<S: AsRef<Path>>(workspace: S) -> Self {
+    pub fn new<S: AsRef<Path>>(workspace: S, opt: GolemOpt) -> Self {
         Self {
+            bid: opt.bid,
+            task_timeout: opt.task_timeout.to_string(),
+            subtask_timeout: opt.subtask_timeout.to_string(),
             js_name: "flite.js".into(),
             wasm_name: "flite.wasm".into(),
             input_dir_path: workspace.as_ref().join("in"),
@@ -122,9 +127,9 @@ impl TaskBuilder {
         let json = json!({
             "type": "wasm",
             "name": "g_flite",
-            "bid": 1,
-            "subtask_timeout": "00:10:00",
-            "timeout": "00:10:00",
+            "bid": self.bid,
+            "subtask_timeout": self.subtask_timeout,
+            "timeout": self.task_timeout,
             "options": {
                 "js_name": self.js_name,
                 "wasm_name": self.wasm_name,
