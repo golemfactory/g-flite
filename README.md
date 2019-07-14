@@ -77,14 +77,14 @@ All of this assumes that you have your Golem installed using the default setting
 
 | Setting     | Default value                 |
 | ----------- | ----------------------------- |
-| datadir     | `$APP_DATA_DIR/golem/default` |
+| datadir     | `$APP_DATA_DIR/default` |
 | RPC address | 127.0.0.1                     |
 | RPC port    | 61000                         |
 
 `$APP_DATA_DIR` is platform specific:
-* on Linux will usually refer to `$HOME/.local/share/<project_path>`
-* on Mac will usually refer to `$HOME/Library/Application Support/<project_path>`
-* on Windows will usually refer to `{FOLDERID_LocalAppData}/<project_path>/data`
+* on Linux will usually refer to `$HOME/.local/share/golem`
+* on Mac will usually refer to `$HOME/Library/Application Support/golem`
+* on Windows will usually refer to `{FOLDERID_LocalAppData}/golem/golem`
 
 If any of the above information is not correct for your Golem configuration, you can
 adjust them directly in the command-line as follows
@@ -93,11 +93,24 @@ adjust them directly in the command-line as follows
 g_flite --address 127.0.0.1 --port 61000 --datadir /abs/path/to/golem/datadir some_text_input.txt some_speech_output.wav
 ```
 
-Finally, by default `g-flite` will split your input text into 6 subtasks and compute them
+By default `g-flite` will split your input text into 6 subtasks and compute them
 on Golem Network. You can also adjust this option in the command-line as follows
 
 ```
 g_flite --subtasks 2 some_text_input.txt some_speech_output.wav
+```
+
+You can also control the timeout values for the Golem task and subtasks (by default, both
+are set to 10 minutes each) which can be adjusted as follows
+
+```
+g_flite --task_timeout 00:10:00 --subtask_timeout 00:10:00 some_text_input.txt some_speech_output.wav
+```
+
+Finally, you can also adjust the bid value for the Golem task (which by default is set to `1.0`)
+
+```
+g_flite --bid 1.0 some_text_input.txt some_speech_output.wav
 ```
 
 All of this information can also be extracted from the command-line with the `-h` or `--help` flags
@@ -105,12 +118,12 @@ All of this information can also be extracted from the command-line with the `-h
 ```
 g_flite -h
 
-g_flite 0.1.0
+g_flite 0.3.0-rc
 Golem RnD Team <contact@golem.network>
 flite, a text-to-speech program, distributed over Golem network
 
 USAGE:
-    g_flite [FLAGS] [OPTIONS] <TEXTFILE> <WAVFILE>
+    g_flite [FLAGS] [OPTIONS] <input> <output>
 
 FLAGS:
     -h, --help       Prints help information
@@ -118,14 +131,17 @@ FLAGS:
     -v, --verbose    Turns verbose logging on
 
 OPTIONS:
-        --address <ADDRESS>    Sets RPC address to Golem instance
-        --datadir <DATADIR>    Sets path to Golem datadir
-        --port <PORT>          Sets RPC port to Golem instance
-        --subtasks <NUM>       Sets number of Golem subtasks
+        --address <address>                    Sets RPC address to Golem instance [default: 127.0.0.1]
+        --bid <bid>                            Sets bid value for Golem task [default: 1.0]
+        --datadir <datadir>                    Sets path to Golem datadir
+        --port <port>                          Sets RPC port to Golem instance [default: 61000]
+        --subtask_timeout <subtask_timeout>    Sets Golem's subtask timeout value [default: 00:10:00]
+        --subtasks <subtasks>                  Sets number of Golem subtasks [default: 6]
+        --task_timeout <task_timeout>          Sets Golem's task timeout value [default: 00:10:00]
 
 ARGS:
-    <TEXTFILE>    Input text file
-    <WAVFILE>     Output WAV file
+    <input>     Input text file
+    <output>    Output WAV file
 ```
 
 ## Issues
