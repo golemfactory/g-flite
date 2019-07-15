@@ -99,7 +99,7 @@ fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>> {
 
     let word_count = contents.split_whitespace().count();
 
-    log::info!("Each chunk will have max of {} words", word_count);
+    log::info!("Input text file has {} words", word_count);
 
     println!(
         "{} {}Splitting '{}' into {} Golem subtasks...",
@@ -109,42 +109,33 @@ fn split_textfile(textfile: &str, num_subtasks: usize) -> Result<Vec<String>> {
         num_subtasks,
     );
 
-    let mut chunks: Vec<String> = Vec::with_capacity(num_subtasks);
-    let num_words = (word_count as f64 / num_subtasks as f64).round() as usize;
+    let mut chunks = Vec::with_capacity(num_subtasks);
+    let num_words = (word_count as f64 / num_subtasks as f64).ceil() as usize;
 
-    let mut acc: String = String::new();
-    for (i, word) in contents.split_whitespace().enumerate() {
-        acc.push_str(word);
-        acc.push(' ');
+    log::info!("Each chunk will have max {} words", num_words);
 
-        if (i + 1) % num_words == 0 {
-            if log::log_enabled!(log::Level::Info) {
-                log::info!(
-                    "Chunk {} has {} words",
-                    chunks.len(),
-                    acc.split_whitespace().count()
-                );
-            }
+    let mut acc = Vec::with_capacity(num_words);
+    for word in contents.split_whitespace() {
+        acc.push(word);
 
+        if acc.len() == num_words {
             chunks.push(acc);
-            acc = String::new();
+            acc = Vec::with_capacity(num_words);
             continue;
         }
     }
 
     if !acc.is_empty() {
-        if log::log_enabled!(log::Level::Info) {
-            log::info!(
-                "Chunk {} has {} words",
-                chunks.len(),
-                acc.split_whitespace().count()
-            );
-        }
-
         chunks.push(acc);
     }
 
-    Ok(chunks)
+    if log::log_enabled!(log::Level::Info) {
+        for (i, chunk) in chunks.iter().enumerate() {
+            log::info!("Chunk {} has {} words", i, chunk.len(),);
+        }
+    }
+
+    Ok(chunks.into_iter().map(|chunk| chunk.join(" ")).collect())
 }
 
 fn run_on_golem<S: AsRef<path::Path>>(
