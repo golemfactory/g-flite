@@ -3,7 +3,7 @@ mod timeout;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-use console::style;
+use console::{style, Emoji};
 use env_logger::{Builder, Env};
 use golem_rpc_api::comp::{self, AsGolemComp};
 use hound;
@@ -17,10 +17,10 @@ use std::time::SystemTime;
 use structopt::StructOpt;
 use timeout::Timeout;
 
-static TRUCK: &str = "🚚  ";
-static CLIP: &str = "🔗  ";
-static PAPER: &str = "📃  ";
-static HOURGLASS: &str = "⌛  ";
+static TRUCK: Emoji = Emoji("🚚  ", "");
+static CLIP: Emoji = Emoji("🔗  ", "");
+static PAPER: Emoji = Emoji("📃  ", "");
+static HOURGLASS: Emoji = Emoji("⌛  ", "");
 
 #[derive(Debug, StructOpt)]
 #[structopt(
