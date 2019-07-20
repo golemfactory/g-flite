@@ -13,6 +13,10 @@ use std::fs;
 use std::io::Read;
 use std::path;
 use std::process;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 use std::time::SystemTime;
 use structopt::StructOpt;
 use timeout::Timeout;
@@ -215,10 +219,23 @@ fn run_on_golem<S: AsRef<path::Path>>(
     bar.inc(0);
     let mut old_progress = 0.0;
 
+    let terminate = Arc::new(AtomicBool::new(false));
+
+    let t = Arc::clone(&terminate);
+    let _ = ctrlc::set_handler(move || {
+        t.store(true, Ordering::Relaxed);
+    });
+
     loop {
+        if terminate.load(Ordering::Relaxed) {
+            sys.block_on(endpoint.as_golem_comp().abort_task(task_id.clone()))
+                .map_err(|e| format!("cancelling task '{}': {}", task_id.clone(), e))?;
+            return Err("received Ctrl-C".to_owned());
+        }
+
         let resp = sys
             .block_on(endpoint.as_golem_comp().get_task(task_id.clone()))
-            .map_err(|e| format!("polling for task '{:#?}': {}", task.json, e))?;
+            .map_err(|e| format!("polling for task '{}': {}", task_id.clone(), e))?;
         let task_info = resp.ok_or("parsing task info from Golem".to_owned())?;
 
         log::info!("Received task info from Golem: {:?}", task_info);
@@ -250,7 +267,7 @@ fn run_on_golem<S: AsRef<path::Path>>(
             _ => {}
         }
 
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(1));
     }
 
     Ok(task)
