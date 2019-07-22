@@ -1,4 +1,4 @@
-use super::{GolemOpt, Result};
+use super::Result;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
@@ -21,11 +21,16 @@ pub struct TaskBuilder {
 }
 
 impl TaskBuilder {
-    pub fn new<S: AsRef<Path>>(workspace: S, opt: GolemOpt) -> Self {
+    pub fn new<P: AsRef<Path>, S: AsRef<str>>(
+        workspace: P,
+        bid: f64,
+        task_timeout: S,
+        subtask_timeout: S,
+    ) -> Self {
         Self {
-            bid: opt.bid,
-            task_timeout: opt.task_timeout.to_string(),
-            subtask_timeout: opt.subtask_timeout.to_string(),
+            bid,
+            task_timeout: task_timeout.as_ref().to_owned(),
+            subtask_timeout: subtask_timeout.as_ref().to_owned(),
             js_name: "flite.js".into(),
             wasm_name: "flite.wasm".into(),
             input_dir_path: workspace.as_ref().join("in"),
