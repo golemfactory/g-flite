@@ -174,7 +174,7 @@ impl App {
 
         loop {
             if self.abort.load(Ordering::Relaxed) {
-                sys.block_on(endpoint.as_golem_comp().abort_task(task_id.clone()))
+                sys.block_on(endpoint.as_golem_comp().delete_task(task_id.clone()))
                     .map_err(|e| format!("cancelling task '{}': {}", task_id.clone(), e))?;
                 return Ok(CompFragment::CtrlC);
             }
