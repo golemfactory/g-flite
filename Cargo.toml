@@ -21,7 +21,7 @@ hound = { git="https://github.com/kubkon/hound" }
 openssl = "0.10.20"
 structopt = "0.2.18"
 chrono = "0.4.7"
-ctrlc = { version = "3.0", features = ["termination"] }
+ctrlc = "3.0"
 
 [features]
 openssl_vendored = ["openssl/vendored"]
