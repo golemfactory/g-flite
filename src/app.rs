@@ -1,30 +1,71 @@
-use super::task::{Task, TaskBuilder};
-use super::timeout::Timeout;
-use super::{Opt, Result};
+use super::Opt;
 use console::{style, Emoji};
-use golem_rpc_api::comp::{self, AsGolemComp};
+use gwasm_api::prelude::*;
 use hound;
 use indicatif::ProgressBar;
 use std::convert::TryFrom;
-use std::env;
 use std::fs;
-use std::io::Read;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
-use std::time::SystemTime;
+use std::path::{Path, PathBuf};
+use tempfile::{Builder, TempDir};
 
 static TRUCK: Emoji = Emoji("🚚  ", "");
 static CLIP: Emoji = Emoji("🔗  ", "");
 static PAPER: Emoji = Emoji("📃  ", "");
 static HOURGLASS: Emoji = Emoji("⌛  ", "");
 
+const FLITE_JS: &[u8] = include_bytes!("../assets/flite.js");
+const FLITE_WASM: &[u8] = include_bytes!("../assets/flite.wasm");
+
+type Result<T> = std::result::Result<T, String>;
+
 #[derive(Debug)]
-pub enum CompFragment<T> {
-    Success(T),
-    CtrlC,
+enum Workspace {
+    UserSpecified(PathBuf),
+    Temp(TempDir),
+}
+
+impl AsRef<Path> for Workspace {
+    fn as_ref(&self) -> &Path {
+        match self {
+            Workspace::UserSpecified(x) => x.as_ref(),
+            Workspace::Temp(x) => x.as_ref(),
+        }
+    }
+}
+
+struct ProgressUpdater {
+    bar: ProgressBar,
+    progress: f64,
+    num_subtasks: u64,
+}
+
+impl ProgressUpdater {
+    fn new(num_subtasks: u64) -> Self {
+        Self {
+            bar: ProgressBar::new(num_subtasks),
+            progress: 0.0,
+            num_subtasks,
+        }
+    }
+}
+
+impl ProgressUpdate for ProgressUpdater {
+    fn update(&mut self, progress: f64) {
+        if progress > self.progress {
+            let delta = progress - self.progress;
+            self.progress = progress;
+            self.bar
+                .inc((delta * self.num_subtasks as f64).round() as u64);
+        }
+    }
+
+    fn start(&mut self) {
+        self.bar.inc(0)
+    }
+
+    fn stop(&mut self) {
+        self.bar.finish_and_clear()
+    }
 }
 
 #[derive(Debug)]
@@ -34,20 +75,19 @@ pub struct App {
     datadir: PathBuf,
     address: String,
     port: u16,
-    subtasks: usize,
+    num_subtasks: u64,
     bid: f64,
     task_timeout: Timeout,
     subtask_timeout: Timeout,
-    abort: Arc<AtomicBool>,
+    workspace: Workspace,
 }
 
 impl App {
-    fn split_input(&self) -> Result<CompFragment<Vec<String>>> {
-        let mut contents = String::new();
-        fs::File::open(&self.input)
-            .and_then(|mut f| f.read_to_string(&mut contents))
-            .map_err(|e| format!("reading from '{:?}': {}", self.input, e))?;
-
+    fn split_input(&self) -> Result<Vec<String>> {
+        let contents =
+            fs::read(&self.input).map_err(|e| format!("reading from '{:?}': {}", self.input, e))?;
+        let contents =
+            String::from_utf8(contents).map_err(|_| format!("converting read bytes to string"))?;
         let word_count = contents.split_whitespace().count();
 
         log::info!("Input text file has {} words", word_count);
@@ -57,11 +97,11 @@ impl App {
             style("[1/4]").bold().dim(),
             PAPER,
             self.input.to_string_lossy(),
-            self.subtasks,
+            self.num_subtasks,
         );
 
-        let mut chunks = Vec::with_capacity(self.subtasks);
-        let num_words = (word_count as f64 / self.subtasks as f64).ceil() as usize;
+        let mut chunks = Vec::with_capacity(self.num_subtasks as usize);
+        let num_words = (word_count as f64 / self.num_subtasks as f64).ceil() as usize;
 
         log::info!("Each chunk will have max {} words", num_words);
 
@@ -86,152 +126,33 @@ impl App {
             }
         }
 
-        Ok(CompFragment::Success(
-            chunks.into_iter().map(|chunk| chunk.join(" ")).collect(),
-        ))
+        Ok(chunks.into_iter().map(|chunk| chunk.join(" ")).collect())
     }
 
-    fn send_to_golem(&self, chunks: CompFragment<Vec<String>>) -> Result<CompFragment<Task>> {
-        let chunks = match chunks {
-            CompFragment::Success(chunks) => chunks,
-            CompFragment::CtrlC => return Ok(CompFragment::CtrlC),
-        };
-
-        println!(
-            "{} {}Sending task to Golem...",
-            style("[2/4]").bold().dim(),
-            TRUCK
-        );
-
-        // prepare workspace
-        let mut workspace = env::temp_dir();
-        let time_now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(|e| e.to_string())?;
-        let subdir = format!("g_flite_{}", time_now.as_secs());
-        workspace.push(subdir);
-        fs::create_dir(workspace.as_path()).map_err(|e| {
-            format!(
-                "creating directory '{}': {}",
-                workspace.to_string_lossy(),
-                e
-            )
-        })?;
-
-        log::info!("Will prepare task in '{:?}'", workspace);
+    fn prepare_task(&self, chunks: impl IntoIterator<Item = String>) -> Result<Task> {
+        log::info!("Will prepare task in '{:?}'", self.workspace);
 
         // prepare Golem task
-        let mut task_builder = TaskBuilder::new(
-            workspace,
-            self.bid,
-            self.task_timeout.to_string(),
-            self.subtask_timeout.to_string(),
-        );
+        let binary = GWasmBinary {
+            js: FLITE_JS,
+            wasm: FLITE_WASM,
+        };
+        let mut task_builder = TaskBuilder::new(&self.workspace, binary)
+            .name("g_flite")
+            .bid(self.bid)
+            .timeout(self.task_timeout)
+            .subtask_timeout(self.subtask_timeout);
 
         for chunk in chunks {
-            task_builder.add_subtask(chunk);
+            task_builder = task_builder.push_subtask_data(chunk.as_bytes());
         }
 
-        let task = task_builder.build()?;
-
-        // connect to Golem
-        let mut sys = actix::System::new("g-flite");
-        let endpoint = sys
-            .block_on(golem_rpc_api::connect_to_app(
-                &self.datadir,
-                Some(golem_rpc_api::Net::TestNet),
-                Some((&self.address, self.port)),
-            ))
-            .map_err(|e| {
-                format!(
-                    "connecting to Golem with datadir='{:?}', net='{}', address='{}:{}': {}",
-                    self.datadir,
-                    golem_rpc_api::Net::TestNet,
-                    self.address,
-                    self.port,
-                    e
-                )
-            })?;
-
-        // TODO check if account is unlocked
-        // TODO check if terms are accepted
-
-        let resp = sys
-            .block_on(endpoint.as_golem_comp().create_task(task.json.clone()))
-            .map_err(|e| format!("creating Golem task '{:#?}': {}", task.json, e))?;
-        let task_id = resp.0.ok_or("extracting Golem task's id".to_owned())?;
-
-        // wait
-        println!(
-            "{} {}Waiting on compute to finish...",
-            style("[3/4]").bold().dim(),
-            HOURGLASS
-        );
-        let num_tasks = task.expected_output_paths.len() as u64;
-        let bar = ProgressBar::new(num_tasks);
-        bar.inc(0);
-        let mut old_progress = 0.0;
-
-        loop {
-            if self.abort.load(Ordering::Relaxed) {
-                sys.block_on(endpoint.as_golem_comp().delete_task(task_id.clone()))
-                    .map_err(|e| format!("cancelling task '{}': {}", task_id.clone(), e))?;
-                return Ok(CompFragment::CtrlC);
-            }
-
-            let resp = sys
-                .block_on(endpoint.as_golem_comp().get_task(task_id.clone()))
-                .map_err(|e| format!("polling for task '{}': {}", task_id.clone(), e))?;
-            let task_info = resp.ok_or("parsing task info from Golem".to_owned())?;
-
-            log::info!("Received task info from Golem: {:?}", task_info);
-
-            let progress = task_info
-                .progress
-                .ok_or("reading task's progress".to_owned())?
-                * 100.0;
-
-            if progress != old_progress {
-                let delta = (progress - old_progress) / 100.0;
-                old_progress = progress;
-                bar.inc((delta * num_tasks as f64).round() as u64);
-            }
-
-            match task_info.status {
-                comp::TaskStatus::Restarted => {
-                    // reset progress bar
-                    bar.inc(0);
-                    old_progress = 0.0;
-                }
-                comp::TaskStatus::Aborted => {
-                    return Err(
-                        "waiting for task to complete: task aborted by someone else".to_owned()
-                    )
-                }
-                comp::TaskStatus::Timeout => {
-                    return Err("waiting for task to complete: task timed out".to_owned())
-                }
-                comp::TaskStatus::Finished => break,
-                _ => {}
-            }
-
-            thread::sleep(Duration::from_secs(1));
-        }
-
-        Ok(CompFragment::Success(task))
+        task_builder
+            .build()
+            .map_err(|e| format!("building gWasm task: {}", e))
     }
 
-    fn combine_output(&self, task: CompFragment<Task>) -> Result<CompFragment<()>> {
-        let mut task = match task {
-            CompFragment::Success(task) => task,
-            CompFragment::CtrlC => return Ok(CompFragment::CtrlC),
-        };
-
-        let first = task
-            .expected_output_paths
-            .pop_front()
-            .ok_or("combining results: no results received from Golem".to_owned())?;
-
+    fn combine_output(&self, task: ComputedTask) -> Result<()> {
         println!(
             "{} {}Combining output into '{}'...",
             style("[4/4]").bold().dim(),
@@ -239,66 +160,56 @@ impl App {
             self.output.to_string_lossy()
         );
 
-        let reader = hound::WavReader::open(&first)
-            .map_err(|e| format!("opening WAVE file '{}': {}", first.to_string_lossy(), e))?;
-        let spec = reader.spec();
+        let mut writer: Option<hound::WavWriter<_>> = None;
+        for (i, subtask) in task.subtasks.into_iter().enumerate() {
+            for (_, reader) in subtask.data.into_iter() {
+                let reader = hound::WavReader::new(reader)
+                    .map_err(|e| format!("parsing WAVE input: {}", e))?;
 
-        log::info!("Using Wav spec: {:?}", spec);
+                let wrt = writer.get_or_insert_with(|| {
+                    hound::WavWriter::create(&self.output, reader.spec()).unwrap()
+                });
+                let mut wrt = wrt.get_i16_writer(reader.len());
 
-        let mut writer = hound::WavWriter::create(&self.output, spec).map_err(|e| {
-            format!(
-                "creating WAVE file '{}': {}",
-                self.output.to_string_lossy(),
-                e
-            )
-        })?;
-        for sample in reader.into_samples::<i16>() {
-            sample
-                .and_then(|sample| writer.write_sample(sample))
-                .map_err(|e| {
-                    format!(
-                        "reading audio sample from file '{}': {}",
-                        first.to_string_lossy(),
-                        e
-                    )
-                })?;
-        }
-
-        for expected_file in task.expected_output_paths {
-            let reader = hound::WavReader::open(&expected_file).map_err(|e| {
-                format!(
-                    "opening WAVE file '{}': {}",
-                    expected_file.to_string_lossy(),
-                    e
-                )
-            })?;
-            for sample in reader.into_samples::<i16>() {
-                sample
-                    .and_then(|sample| writer.write_sample(sample))
-                    .map_err(|e| {
-                        format!(
-                            "reading audio sample from file '{}': {}",
-                            expected_file.to_string_lossy(),
-                            e
-                        )
-                    })?;
+                for sample in reader.into_samples::<i16>() {
+                    sample
+                        .map(|sample| unsafe { wrt.write_sample_unchecked(sample) })
+                        .map_err(|e| format!("reading audio sample from subtask '{}': {}", i, e))?;
+                }
             }
         }
 
-        Ok(CompFragment::Success(()))
+        Ok(())
     }
 
-    pub fn run(&self) -> Result<CompFragment<()>> {
-        // register for ctrl-c events
-        let abort = Arc::clone(&self.abort);
-        let _ = ctrlc::set_handler(move || {
-            abort.store(true, Ordering::Relaxed);
-        });
+    pub fn run(&self) -> Result<()> {
+        let chunks = self.split_input()?;
+        let task = self.prepare_task(chunks)?;
 
-        // run!
-        self.split_input()
-            .and_then(|chunks| self.send_to_golem(chunks))
-            .and_then(|task| self.combine_output(task))
+        println!(
+            "{} {}Sending task to Golem...",
+            style("[2/4]").bold().dim(),
+            TRUCK
+        );
+
+        println!(
+            "{} {}Waiting on compute to finish...",
+            style("[3/4]").bold().dim(),
+            HOURGLASS
+        );
+
+        let progress_updater = ProgressUpdater::new(self.num_subtasks);
+        let computed_task = compute(
+            &self.datadir,
+            &self.address,
+            self.port,
+            Net::TestNet,
+            task,
+            progress_updater,
+        )
+        .map_err(|e| format!("computing task on Golem: {}", e))?;
+
+        self.combine_output(computed_task)
     }
 }
 
@@ -328,7 +239,12 @@ impl TryFrom<Opt> for App {
         let output = opt.output;
 
         let datadir = match opt.datadir {
-            Some(datadir) => datadir,
+            Some(datadir) => datadir.canonicalize().map_err(|e| {
+                format!(
+                    "working out absolute path for the provided datadir '{:?}': {}",
+                    datadir, e
+                )
+            })?,
             None => match appdirs::user_data_dir(Some("golem"), Some("golem"), false) {
                 Ok(datadir) => datadir.join("default"),
                 Err(_) => {
@@ -341,13 +257,27 @@ impl TryFrom<Opt> for App {
             },
         };
 
-        let address = opt.address.clone();
+        let address = opt.address;
         let port = opt.port;
-        let subtasks = opt.subtasks;
+        let num_subtasks = opt.subtasks;
         let bid = opt.bid;
         let task_timeout = opt.task_timeout;
         let subtask_timeout = opt.subtask_timeout;
-        let abort = Arc::new(AtomicBool::new(false));
+
+        let workspace = match opt.workspace {
+            Some(workspace) => Workspace::UserSpecified(workspace.canonicalize().map_err(|e| {
+                format!(
+                    "working out absolute path for provided workspace dir '{:?}': {}",
+                    workspace, e
+                )
+            })?),
+            None => Workspace::Temp(
+                Builder::new()
+                    .prefix("g_flite")
+                    .tempdir()
+                    .map_err(|e| format!("creating workspace dir in your tmp files: {}", e))?,
+            ),
+        };
 
         Ok(Self {
             input,
@@ -355,11 +285,11 @@ impl TryFrom<Opt> for App {
             datadir,
             address,
             port,
-            subtasks,
+            num_subtasks,
             bid,
             task_timeout,
             subtask_timeout,
-            abort,
+            workspace,
         })
     }
 }
