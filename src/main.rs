@@ -1,12 +1,8 @@
 mod app;
-mod task;
-mod timeout;
 
-pub type Result<T> = std::result::Result<T, String>;
-
-use self::app::{App, CompFragment};
-use self::timeout::Timeout;
+use app::App;
 use env_logger::{Builder, Env};
+use gwasm_api::prelude::Timeout;
 use std::convert::TryInto;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -28,7 +24,7 @@ struct Opt {
 
     /// Sets number of Golem subtasks
     #[structopt(long = "subtasks", default_value = "6")]
-    subtasks: usize,
+    subtasks: u64,
 
     /// Sets bid value for Golem task
     #[structopt(long = "bid", default_value = "1.0")]
@@ -58,6 +54,16 @@ struct Opt {
     #[structopt(long = "port", default_value = "61000")]
     port: u16,
 
+    /// Sets workspace dir
+    ///
+    /// This option is mainly used for debugging the gWasm task as it allows
+    /// you to specify the exact path to the workspace where the contents of
+    /// the entire gWasm task will be stored. Note that it will *not* be
+    /// automatically removed after the app finishes successfully; instead,
+    /// it is your responsibility to clean up after yourself.
+    #[structopt(long = "workspace", parse(from_os_str))]
+    workspace: Option<PathBuf>,
+
     /// Turns verbose logging on
     #[structopt(short = "v", long = "verbose")]
     verbose: bool,
@@ -70,18 +76,7 @@ fn main() {
         Builder::from_env(Env::default().default_filter_or("info")).init();
     }
 
-    match opt.try_into().and_then(|app: App| app.run()) {
-        Ok(CompFragment::Success(_)) => {
-            // computation finished uninterrupted and results were pooled together successfully
-            println!("Success")
-        }
-        Ok(CompFragment::CtrlC) => {
-            // computation was cancelled by the user
-            println!("Aborted by user (did you press ctrl-c?)")
-        }
-        Err(err) => {
-            // unexpected error occurred
-            eprintln!("An error occurred while {}", err)
-        }
+    if let Err(e) = opt.try_into().and_then(|app: App| app.run()) {
+        eprintln!("An error occurred while {}", e)
     }
 }
