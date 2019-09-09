@@ -104,7 +104,7 @@ You can also control the timeout values for the Golem task and subtasks (by defa
 are set to 10 minutes each) which can be adjusted as follows
 
 ```
-g_flite --task_timeout 00:10:00 --subtask_timeout 00:10:00 some_text_input.txt some_speech_output.wav
+g_flite --task_timeout 00:10:00 --subtask_timeout 00:01:00 some_text_input.txt some_speech_output.wav
 ```
 
 Finally, you can also adjust the bid value for the Golem task (which by default is set to `1.0`)
