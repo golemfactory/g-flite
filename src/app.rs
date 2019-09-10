@@ -80,6 +80,7 @@ pub struct App {
     task_timeout: Timeout,
     subtask_timeout: Timeout,
     workspace: Workspace,
+    net: Net,
 }
 
 impl App {
@@ -203,7 +204,7 @@ impl App {
             &self.datadir,
             &self.address,
             self.port,
-            Net::TestNet,
+            self.net.clone(),
             task,
             progress_updater,
         )
@@ -263,6 +264,11 @@ impl TryFrom<Opt> for App {
         let bid = opt.bid;
         let task_timeout = opt.task_timeout;
         let subtask_timeout = opt.subtask_timeout;
+        let net = if opt.mainnet {
+            Net::MainNet
+        } else {
+            Net::TestNet
+        };
 
         let workspace = match opt.workspace {
             Some(workspace) => Workspace::UserSpecified(workspace.canonicalize().map_err(|e| {
@@ -290,6 +296,7 @@ impl TryFrom<Opt> for App {
             task_timeout,
             subtask_timeout,
             workspace,
+            net,
         })
     }
 }
