@@ -67,6 +67,10 @@ struct Opt {
     /// Turns verbose logging on
     #[structopt(short = "v", long = "verbose")]
     verbose: bool,
+
+    /// Configures golem-client to use mainnet datadir
+    #[structopt(long)]
+    mainnet: bool,
 }
 
 fn main() {
