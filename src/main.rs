@@ -1,10 +1,10 @@
 mod app;
 
 use app::App;
+use colored::Colorize;
 use env_logger::{Builder, Env};
 use gwasm_api::prelude::Timeout;
-use std::convert::TryInto;
-use std::path::PathBuf;
+use std::{convert::TryInto, path::PathBuf};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -81,6 +81,6 @@ fn main() {
     }
 
     if let Err(e) = opt.try_into().and_then(|app: App| app.run()) {
-        eprintln!("An error occurred while {}", e)
+        eprintln!("{}", format!("An error occurred while {}", e).red())
     }
 }
