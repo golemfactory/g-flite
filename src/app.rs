@@ -3,9 +3,11 @@ use console::{style, Emoji};
 use gwasm_api::prelude::*;
 use hound;
 use indicatif::ProgressBar;
-use std::convert::TryFrom;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::{
+    convert::TryFrom,
+    fmt, fs,
+    path::{Path, PathBuf},
+};
 use tempfile::{Builder, TempDir};
 
 static TRUCK: Emoji = Emoji("🚚  ", "");
@@ -22,6 +24,15 @@ type Result<T> = std::result::Result<T, String>;
 enum Workspace {
     UserSpecified(PathBuf),
     Temp(TempDir),
+}
+
+impl fmt::Display for Workspace {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Workspace::UserSpecified(path) => write!(f, "{}", path.display()),
+            Workspace::Temp(dir) => write!(f, "{}", dir.path().display()),
+        }
+    }
 }
 
 impl AsRef<Path> for Workspace {
@@ -85,11 +96,18 @@ pub struct App {
 
 impl App {
     fn split_input(&self) -> Result<Vec<String>> {
-        let contents =
-            fs::read(&self.input).map_err(|e| format!("reading from '{:?}': {}", self.input, e))?;
+        let contents = fs::read(&self.input)
+            .map_err(|e| format!("reading from '{}': {}", self.input.display(), e))?;
         let contents =
             String::from_utf8(contents).map_err(|_| format!("converting read bytes to string"))?;
         let word_count = contents.split_whitespace().count();
+
+        if (word_count as u64) < self.num_subtasks {
+            return Err(format!(
+                "splitting input into Golem subtasks: cannot split input of {} words into {} subtasks",
+                word_count, self.num_subtasks
+            ));
+        }
 
         log::info!("Input text file has {} words", word_count);
 
@@ -131,7 +149,7 @@ impl App {
     }
 
     fn prepare_task(&self, chunks: impl IntoIterator<Item = String>) -> Result<Task> {
-        log::info!("Will prepare task in '{:?}'", self.workspace);
+        log::info!("Will prepare task in '{}'", self.workspace);
 
         // prepare Golem task
         let binary = GWasmBinary {
@@ -158,7 +176,7 @@ impl App {
             "{} {}Combining output into '{}'...",
             style("[4/4]").bold().dim(),
             CLIP,
-            self.output.to_string_lossy()
+            self.output.display()
         );
 
         let mut writer: Option<hound::WavWriter<_>> = None;
@@ -222,8 +240,8 @@ impl TryFrom<Opt> for App {
         let input = opt.input;
         if !input.is_file() {
             return Err(format!(
-                "Input file '{:?}' doesn't exist. Did you make a typo anywhere?",
-                input
+                "Input file '{}' doesn't exist. Did you make a typo anywhere?",
+                input.display()
             ));
         }
 
@@ -232,7 +250,7 @@ impl TryFrom<Opt> for App {
             let parent_str = parent.to_string_lossy();
             if !parent_str.is_empty() && !parent.exists() {
                 return Err(format!(
-                    "Output path '{}' doesn't exist. Did you make a type anywhere?",
+                    "Output path '{}' doesn't exist. Did you make a typo anywhere?",
                     parent_str,
                 ));
             }
@@ -242,8 +260,9 @@ impl TryFrom<Opt> for App {
         let datadir = match opt.datadir {
             Some(datadir) => datadir.canonicalize().map_err(|e| {
                 format!(
-                    "working out absolute path for the provided datadir '{:?}': {}",
-                    datadir, e
+                    "working out absolute path for the provided datadir '{}': {}",
+                    datadir.display(),
+                    e
                 )
             })?,
             None => match appdirs::user_data_dir(Some("golem"), Some("golem"), false) {
@@ -273,8 +292,9 @@ impl TryFrom<Opt> for App {
         let workspace = match opt.workspace {
             Some(workspace) => Workspace::UserSpecified(workspace.canonicalize().map_err(|e| {
                 format!(
-                    "working out absolute path for provided workspace dir '{:?}': {}",
-                    workspace, e
+                    "working out absolute path for provided workspace dir '{}': {}",
+                    workspace.display(),
+                    e
                 )
             })?),
             None => Workspace::Temp(

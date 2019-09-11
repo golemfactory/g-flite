@@ -1,6 +1,6 @@
 [package]
 name = "g-flite"
-version = "0.3.2-rc"
+version = "0.4.0-rc"
 authors = ["Golem RnD Team <contact@golem.network>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -16,11 +16,12 @@ log = "0.4.6"
 env_logger = "0.6.1"
 failure="0.1.5"
 appdirs = "0.2"
-gwasm-api = { git = "https://github.com/golemfactory/gwasm-rust-api", tag = "0.1.0-alpha.1" }
+gwasm-api = { git = "https://github.com/golemfactory/gwasm-rust-api", tag = "0.1.0" }
 hound = { git = "https://github.com/kubkon/hound" }
 openssl = "0.10.20"
 structopt = "0.2.18"
 tempfile = "3.1.0"
+colored = "1.8"
 
 [features]
 openssl_vendored = ["openssl/vendored"]
