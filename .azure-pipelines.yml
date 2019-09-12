@@ -130,11 +130,7 @@ jobs:
         target: '$(build.sourceVersion)'
         tagSource: 'manual'
         tag: '$(build.my_tag)'
-        assets: |
-          '$(Build.ArtifactStagingDirectory)/g-flite-$(build.my_tag).tar.gz'
-          '$(Build.ArtifactStagingDirectory)/g-flite-$(build.my_tag).zip'
         title: 'g-flite-$(build.my_tag)'
         assetUploadMode: 'replace'
         addChangeLog: true
         isDraft: true
-
