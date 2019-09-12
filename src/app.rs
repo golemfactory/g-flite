@@ -180,21 +180,39 @@ impl App {
         );
 
         let mut writer: Option<hound::WavWriter<_>> = None;
+
+        log::info!("Computed task = {:?}", task);
+
         for (i, subtask) in task.subtasks.into_iter().enumerate() {
             for (_, reader) in subtask.data.into_iter() {
                 let reader = hound::WavReader::new(reader)
                     .map_err(|e| format!("parsing WAVE input: {}", e))?;
 
-                let wrt = writer.get_or_insert_with(|| {
-                    hound::WavWriter::create(&self.output, reader.spec()).unwrap()
-                });
-                let mut wrt = wrt.get_i16_writer(reader.len());
+                if writer.is_none() {
+                    writer = Some(
+                        hound::WavWriter::create(&self.output, reader.spec()).map_err(|e| {
+                            format!(
+                                "creating output WAVE file '{}': {}",
+                                self.output.display(),
+                                e
+                            )
+                        })?,
+                    );
+                }
 
+                let mut wrt = writer.as_mut().unwrap().get_i16_writer(reader.len());
                 for sample in reader.into_samples::<i16>() {
                     sample
                         .map(|sample| unsafe { wrt.write_sample_unchecked(sample) })
                         .map_err(|e| format!("reading audio sample from subtask '{}': {}", i, e))?;
                 }
+                wrt.flush().map_err(|e| {
+                    format!(
+                        "writing audio samples to file '{}': {}",
+                        self.output.display(),
+                        e
+                    )
+                })?;
             }
         }
 
