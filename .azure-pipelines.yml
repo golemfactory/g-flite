@@ -14,12 +14,15 @@ jobs:
       windows-stable:
         imageName: 'vs2017-win2016'
         rustup_toolchain: stable
+        os_target: windows
       linux-stable:
         imageName: 'ubuntu-16.04'
         rustup_toolchain: stable
+        os_target: linux
       mac-stable:
         imageName: 'macos-10.14'
         rustup_toolchain: stable
+        os_target: osx
 
   pool:
     vmImage: $(imageName)
@@ -111,7 +114,7 @@ jobs:
         rootFolderOrFile: '$(Build.BinariesDirectory)/g-flite'
         archiveType: 'tar'
         tarCompression: 'gz'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/g-flite-$(build.my_tag).tar.gz'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/g-flite-$(OS_TARGET)-$(build.my_tag).tar.gz'
 
     - task: ArchiveFiles@2
       displayName: Gather assets (Win)
@@ -119,7 +122,7 @@ jobs:
       inputs:
         rootFolderOrFile: '$(Build.BinariesDirectory)/g-flite'
         archiveType: 'zip'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/g-flite-$(build.my_tag).zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/g-flite-$(OS_TARGET)-$(build.my_tag).zip'
 
     - task: GithubRelease@0
       condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/'))
