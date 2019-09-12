@@ -1,16 +1,12 @@
-# g-flite [![travis-build-status]][travis]
+# g-flite [![build-status]][build]
 
-[travis-build-status]: https://travis-ci.org/golemfactory/g-flite.svg?branch=master
-[travis]: https://travis-ci.org/golemfactory/g-flite
+[build-status]: https://dev.azure.com/kubkon/g-flite/_apis/build/status/golemfactory.g-flite?branchName=master
+[build]: https://dev.azure.com/kubkon/g-flite/_build/latest?definitionId=7&branchName=master
 
 `g-flite` is a command-line utility which lets you run [flite](http://www.festvox.org/flite/)
 text-to-speech app on Golem Network.
 
 ![g_flite GIF demo](http://i.imgur.com/Ji1CdCN.gif)
-
-__Note that `g-flite` currently requires that you have Golem instance running on the same machine
-and only testnet is currently supported due to the fact that
-[our WASM platform](https://github.com/golemfactory/sp-wasm) is only available on the testnet.__
 
 ## Installation
 You can grab a precompiled version of the program for each OS, Linux, Mac, and Win, from
@@ -57,11 +53,17 @@ for release version.
 ## Usage
 Typical usage should not differ much or at all from how you would use the original `flite` app.
 So, in order to generate speech from some input text `some_text_input.txt` and save to a WAV file
-`some_speech_output.wav`, you would simply run it as
+`some_speech_output.wav` on Golem testnet, you would simply run it as
 
 
 ```
 g_flite some_text_input.txt some_speech_output.wav
+```
+
+**To run the tasks on Golem mainnet, simply add a `--mainnet` flag like so**
+
+```
+g_flite some_text_input.txt some_speech_output.wav --mainnet
 ```
 
 Note that it is required to specify the name of the output file. To provide a more concrete example,
@@ -116,9 +118,7 @@ g_flite --bid 1.0 some_text_input.txt some_speech_output.wav
 All of this information can also be extracted from the command-line with the `-h` or `--help` flags
 
 ```
-g_flite -h
-
-g_flite 0.3.0-rc
+g_flite 0.4.0
 Golem RnD Team <contact@golem.network>
 flite, a text-to-speech program, distributed over Golem network
 
@@ -126,22 +126,56 @@ USAGE:
     g_flite [FLAGS] [OPTIONS] <input> <output>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-    -v, --verbose    Turns verbose logging on
+    -h, --help       
+            Prints help information
+
+        --mainnet    
+            Configures golem-client to use mainnet datadir
+
+    -V, --version    
+            Prints version information
+
+    -v, --verbose    
+            Turns verbose logging on
+
 
 OPTIONS:
-        --address <address>                    Sets RPC address to Golem instance [default: 127.0.0.1]
-        --bid <bid>                            Sets bid value for Golem task [default: 1.0]
-        --datadir <datadir>                    Sets path to Golem datadir
-        --port <port>                          Sets RPC port to Golem instance [default: 61000]
-        --subtask_timeout <subtask_timeout>    Sets Golem's subtask timeout value [default: 00:10:00]
-        --subtasks <subtasks>                  Sets number of Golem subtasks [default: 6]
-        --task_timeout <task_timeout>          Sets Golem's task timeout value [default: 00:10:00]
+        --address <address>                    
+            Sets RPC address to Golem instance [default: 127.0.0.1]
+
+        --bid <bid>                            
+            Sets bid value for Golem task [default: 1.0]
+
+        --datadir <datadir>                    
+            Sets path to Golem datadir
+
+        --port <port>                          
+            Sets RPC port to Golem instance [default: 61000]
+
+        --subtask_timeout <subtask_timeout>    
+            Sets Golem's subtask timeout value [default: 00:10:00]
+
+        --subtasks <subtasks>                  
+            Sets number of Golem subtasks [default: 6]
+
+        --task_timeout <task_timeout>          
+            Sets Golem's task timeout value [default: 00:10:00]
+
+        --workspace <workspace>                
+            Sets workspace dir
+            
+            This option is mainly used for debugging the gWasm task as it allows you to specify the exact path to the
+            workspace where the contents of the entire gWasm task will be stored. Note that it will *not* be
+            automatically removed after the app finishes successfully; instead, it is your responsibility to clean up
+            after yourself.
 
 ARGS:
-    <input>     Input text file
-    <output>    Output WAV file
+    <input>     
+            Input text file
+
+    <output>    
+            Output WAV file
+
 ```
 
 ## Issues
