@@ -89,11 +89,19 @@ jobs:
       displayName: Create tag variable
 
     - task: CopyFiles@2
-      displayName: Copy assets
+      condition: ne( variables['Agent.OS'], 'Windows_NT' )
+      displayName: Copy assets (*nix)
       inputs:
         sourceFolder: '$(Build.SourcesDirectory)/target/release'
-        contents: |
-          g_flite
+        contents: g_flite
+        targetFolder: '$(Build.BinariesDirectory)/g-flite'
+
+    - task: CopyFiles@2
+      condition: eq( variables['Agent.OS'], 'Windows_NT' )
+      displayName: Copy assets (Win)
+      inputs:
+        sourceFolder: '$(Build.SourcesDirectory)/target/release'
+        contents: g_flite.exe
         targetFolder: '$(Build.BinariesDirectory)/g-flite'
 
     - task: ArchiveFiles@2
