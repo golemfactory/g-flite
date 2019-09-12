@@ -38,7 +38,7 @@ struct Opt {
     #[structopt(
         long = "subtask_timeout",
         parse(try_from_str),
-        default_value = "00:10:00"
+        default_value = "00:01:00"
     )]
     subtask_timeout: Timeout,
 
