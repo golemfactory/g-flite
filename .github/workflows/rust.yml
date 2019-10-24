@@ -1,0 +1,139 @@
+name: Continuous integration
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build_unix:
+    name: Build *nix
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      matrix:
+        os: [ubuntu, macOS]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: rustfmt        
+    - name: Check formatting
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all -- --check
+    - name: Run tests
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+    - name: Build release
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release --features openssl_vendored
+    - name: Prepare archive
+      run: |
+        tar -cvzf g-flite.tar.gz target/release/g_flite
+    - name: Prepare tag
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: tag_name
+      uses: olegtarasov/get-tag@v1
+      with:
+        tagname: ${{ steps.tag_name.outputs.tag }}
+    - name: Create release
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: create_release
+      uses: actions/create-release@v1.0.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with: 
+        tag_name: ${{ steps.tag_name.outputs.tag }}
+        release_name: g-flite ${{ steps.tag_name.outputs.tag }}
+        draft: true
+        prerelease: false
+    - name: Upload release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: g-flite.tar.gz
+        asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-${{ matrix.os }}.tar.gz
+        
+  build_win:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: rustfmt
+    - name: Install openssl
+      run: |
+        vcpkg search openssl
+        vcpkg install openssl:x64-windows
+        vcpkg list     
+    - name: Check formatting
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all -- --check
+    - name: Run tests
+      env:
+        VCPKGRS_DYNAMIC: ${{ 1 }}
+      run: |
+        vcpkg integrate install
+        cargo test
+    - name: Build release
+      env:
+        VCPKGRS_DYNAMIC: ${{ 1 }}
+      run: |
+        vcpkg integrate install
+        cargo build --release
+    - name: Prepare archive
+      run: |
+        7z a g-flite.zip target/release/g_flite.exe
+    - name: Prepare tag
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: tag_name
+      uses: olegtarasov/get-tag@v1
+      with:
+        tagname: ${{ steps.tag_name.outputs.tag }}
+    - name: Create release
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: create_release
+      uses: actions/create-release@v1.0.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with: 
+        tag_name: ${{ steps.tag_name.outputs.tag }}
+        release_name: g-flite ${{ steps.tag_name.outputs.tag }}
+        draft: true
+        prerelease: false
+    - name: Upload release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: g-flite.zip
+        asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-windows.zip
