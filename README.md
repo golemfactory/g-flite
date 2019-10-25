@@ -1,7 +1,7 @@
 # g-flite [![build-status]][build]
 
-[build-status]: https://dev.azure.com/kubkon/g-flite/_apis/build/status/golemfactory.g-flite?branchName=master
-[build]: https://dev.azure.com/kubkon/g-flite/_build/latest?definitionId=7&branchName=master
+[build-status]: https://github.com/golemfactory/g-flite/workflows/Continuous%20integration/badge.svg
+[build]: https://github.com/golemfactory/g-flite/actions
 
 `g-flite` is a command-line utility which lets you run [flite](http://www.festvox.org/flite/)
 text-to-speech app on Golem Network.
