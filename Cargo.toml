@@ -1,6 +1,6 @@
 [package]
 name = "g-flite"
-version = "0.4.0-rc"
+version = "0.4.0"
 authors = ["Golem RnD Team <contact@golem.network>"]
 edition = "2018"
 license = "GPL-3.0"

@@ -686,7 +686,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "g-flite"
-version = "0.4.0-rc"
+version = "0.4.0"
 dependencies = [
  "appdirs 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "colored 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
