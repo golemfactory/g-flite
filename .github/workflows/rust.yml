@@ -46,33 +46,11 @@ jobs:
     - name: Prepare archive
       run: |
         tar -cvzf g-flite.tar.gz target/release/g_flite
-    - name: Prepare tag
-      if: startsWith(github.ref, 'refs/tags/v')
-      id: tag_name
-      uses: olegtarasov/get-tag@v1
+    - name: Upload asset
+      uses: actions/upload-artifact@v1
       with:
-        tagname: ${{ steps.tag_name.outputs.tag }}
-    - name: Create release
-      if: startsWith(github.ref, 'refs/tags/v')
-      id: create_release
-      uses: actions/create-release@v1.0.0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with: 
-        tag_name: ${{ steps.tag_name.outputs.tag }}
-        release_name: g-flite ${{ steps.tag_name.outputs.tag }}
-        draft: true
-        prerelease: false
-    - name: Upload release
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-release-asset@v1.0.1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: g-flite.tar.gz
-        asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-${{ matrix.os }}.tar.gz
-        asset_content_type: application/gzip
+        name: ${{ matrix.os }}-asset
+        path: g-flite.tar.gz
         
   build_win:
     name: Build Windows
@@ -113,14 +91,25 @@ jobs:
     - name: Prepare archive
       run: |
         7z a g-flite.zip target/release/g_flite.exe
+    - name: Upload asset
+      uses: actions/upload-artifact@v1
+      with:
+        name: windows-asset
+        path: g-flite.zip
+
+  publish:
+    name: Publish release
+    needs: [build_unix, build_win]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macOS-latest
+    
+    steps:
     - name: Prepare tag
-      if: startsWith(github.ref, 'refs/tags/v')
       id: tag_name
       uses: olegtarasov/get-tag@v1
       with:
         tagname: ${{ steps.tag_name.outputs.tag }}
     - name: Create release
-      if: startsWith(github.ref, 'refs/tags/v')
       id: create_release
       uses: actions/create-release@v1.0.0
       env:
@@ -130,13 +119,42 @@ jobs:
         release_name: g-flite ${{ steps.tag_name.outputs.tag }}
         draft: true
         prerelease: false
-    - name: Upload release
-      if: startsWith(github.ref, 'refs/tags/v')
+    - name: Download asset (linux)
+      uses: actions/download-artifact@v1
+      with:
+        name: linux-asset
+    - name: Download asset (macOS)
+      uses: actions/download-artifact@v1
+      with:
+        name: macOS-asset
+    - name: Download asset (windows)
+      uses: actions/download-artifact@v1
+      with:
+        name: windows-asset
+    - name: Upload artifact (linux)
       uses: actions/upload-release-asset@v1.0.1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: g-flite.zip
+        asset_path: linux-asset/g-flite.tar.gz
+        asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-linux.tar.gz
+        asset_content_type: application/gzip
+    - name: Upload artifact (macOS)
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: macOS-asset/g-flite.tar.gz
+        asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-macos.tar.gz
+        asset_content_type: application/gzip
+    - name: Upload artifact (windows)
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: windows-asset/g-flite.zip
         asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-windows.zip
         asset_content_type: application/zip
