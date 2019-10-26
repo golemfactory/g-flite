@@ -116,7 +116,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with: 
         tag_name: ${{ steps.tag_name.outputs.tag }}
-        release_name: g-flite ${{ steps.tag_name.outputs.tag }}
+        release_name: g-flite-${{ steps.tag_name.outputs.tag }}
         draft: true
         prerelease: false
     - name: Download asset (linux)
@@ -138,7 +138,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ubuntu-asset/g-flite.tar.gz
-        asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-linux.tar.gz
+        asset_name: g-flite-${{ steps.tag_name.outputs.tag }}-linux.tar.gz
         asset_content_type: application/gzip
     - name: Upload artifact (macOS)
       uses: actions/upload-release-asset@v1.0.1
@@ -147,7 +147,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: macOS-asset/g-flite.tar.gz
-        asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-macos.tar.gz
+        asset_name: g-flite-${{ steps.tag_name.outputs.tag }}-macos.tar.gz
         asset_content_type: application/gzip
     - name: Upload artifact (windows)
       uses: actions/upload-release-asset@v1.0.1
@@ -156,5 +156,5 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: windows-asset/g-flite.zip
-        asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-windows.zip
+        asset_name: g-flite-${{ steps.tag_name.outputs.tag }}-windows.zip
         asset_content_type: application/zip
