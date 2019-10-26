@@ -15,6 +15,7 @@ jobs:
     name: Build *nix
     runs-on: ${{ matrix.os }}-latest
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu, macOS]
 
@@ -71,6 +72,7 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: g-flite.tar.gz
         asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-${{ matrix.os }}.tar.gz
+        asset_content_type: application/gzip
         
   build_win:
     name: Build Windows
@@ -137,3 +139,4 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: g-flite.zip
         asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-windows.zip
+        asset_content_type: application/zip
