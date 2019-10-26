@@ -122,7 +122,7 @@ jobs:
     - name: Download asset (linux)
       uses: actions/download-artifact@v1
       with:
-        name: linux-asset
+        name: ubuntu-asset
     - name: Download asset (macOS)
       uses: actions/download-artifact@v1
       with:
@@ -137,7 +137,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: linux-asset/g-flite.tar.gz
+        asset_path: ubuntu-asset/g-flite.tar.gz
         asset_name: g-flite-${{ steps.tag_name.outputs.tag.ref }}-linux.tar.gz
         asset_content_type: application/gzip
     - name: Upload artifact (macOS)
