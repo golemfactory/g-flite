@@ -82,7 +82,8 @@ impl ProgressUpdate for ProgressUpdater {
 #[derive(Debug)]
 pub struct App {
     input: PathBuf,
-    output: PathBuf,
+    output_dir: PathBuf,
+    output_filename: PathBuf,
     datadir: PathBuf,
     address: String,
     port: u16,
@@ -156,11 +157,13 @@ impl App {
             js: FLITE_JS,
             wasm: FLITE_WASM,
         };
+        // get expected output dir (if any)
         let mut task_builder = TaskBuilder::new(&self.workspace, binary)
             .name("g_flite")
             .bid(self.bid)
             .timeout(self.task_timeout)
-            .subtask_timeout(self.subtask_timeout);
+            .subtask_timeout(self.subtask_timeout)
+            .output_path(&self.output_dir);
 
         for chunk in chunks {
             task_builder = task_builder.push_subtask_data(chunk.as_bytes());
@@ -172,11 +175,12 @@ impl App {
     }
 
     fn combine_output(&self, task: ComputedTask) -> Result<()> {
+        let output = self.output_dir.join(&self.output_filename);
         println!(
             "{} {}Combining output into '{}'...",
             style("[4/4]").bold().dim(),
             CLIP,
-            self.output.display()
+            output.display()
         );
 
         let mut writer: Option<hound::WavWriter<_>> = None;
@@ -189,15 +193,9 @@ impl App {
                     .map_err(|e| format!("parsing WAVE input: {}", e))?;
 
                 if writer.is_none() {
-                    writer = Some(
-                        hound::WavWriter::create(&self.output, reader.spec()).map_err(|e| {
-                            format!(
-                                "creating output WAVE file '{}': {}",
-                                self.output.display(),
-                                e
-                            )
-                        })?,
-                    );
+                    writer = Some(hound::WavWriter::create(&output, reader.spec()).map_err(
+                        |e| format!("creating output WAVE file '{}': {}", output.display(), e),
+                    )?);
                 }
 
                 let mut wrt = writer.as_mut().unwrap().get_i16_writer(reader.len());
@@ -209,7 +207,7 @@ impl App {
                 wrt.flush().map_err(|e| {
                     format!(
                         "writing audio samples to file '{}': {}",
-                        self.output.display(),
+                        output.display(),
                         e
                     )
                 })?;
@@ -222,6 +220,8 @@ impl App {
     pub fn run(&self) -> Result<()> {
         let chunks = self.split_input()?;
         let task = self.prepare_task(chunks)?;
+
+        log::debug!("g_flite run task = {:?}", task);
 
         println!(
             "{} {}Sending task to Golem...",
@@ -264,7 +264,7 @@ impl TryFrom<Opt> for App {
         }
 
         // verify output path excluding topmost file exists
-        if let Some(parent) = opt.output.parent() {
+        let output_dir = if let Some(parent) = opt.output.parent() {
             let parent_str = parent.to_string_lossy();
             if !parent_str.is_empty() && !parent.exists() {
                 return Err(format!(
@@ -272,8 +272,23 @@ impl TryFrom<Opt> for App {
                     parent_str,
                 ));
             }
-        }
-        let output = opt.output;
+
+            parent
+        } else {
+            Path::new(".")
+        };
+        let output_dir = output_dir.canonicalize().map_err(|e| {
+            format!(
+                "working out absolute path for the expected output path '{}': {}",
+                output_dir.display(),
+                e
+            )
+        })?;
+        let output_filename = opt
+            .output
+            .file_name()
+            .map(PathBuf::from)
+            .ok_or(format!("working out the expected output filename"))?;
 
         let datadir = match opt.datadir {
             Some(datadir) => datadir.canonicalize().map_err(|e| {
@@ -325,7 +340,8 @@ impl TryFrom<Opt> for App {
 
         Ok(Self {
             input,
-            output,
+            output_dir,
+            output_filename,
             datadir,
             address,
             port,

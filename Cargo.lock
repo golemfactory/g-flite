@@ -686,14 +686,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "g-flite"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "appdirs 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "colored 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "console 0.7.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "gwasm-api 0.1.0 (git+https://github.com/golemfactory/gwasm-rust-api?tag=0.1.0)",
+ "gwasm-api 0.1.2 (git+https://github.com/golemfactory/gwasm-rust-api?tag=0.1.2)",
  "hound 3.4.0 (git+https://github.com/kubkon/hound)",
  "indicatif 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -758,8 +758,8 @@ dependencies = [
 
 [[package]]
 name = "gwasm-api"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/gwasm-rust-api?tag=0.1.0#fc6b6b2a097f4932a4b05f9d98432275d3698b7f"
+version = "0.1.2"
+source = "git+https://github.com/golemfactory/gwasm-rust-api?tag=0.1.2#dd071b9ba149a071c61a2225939bc2fbe9557386"
 dependencies = [
  "actix 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-wamp 0.1.0 (git+https://github.com/golemfactory/golem-client?tag=v0.1.9)",
@@ -2305,7 +2305,7 @@ dependencies = [
 "checksum getrandom 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "473a1265acc8ff1e808cd0a1af8cee3c2ee5200916058a2ca113c29f2d903571"
 "checksum golem-rpc-api 0.1.0 (git+https://github.com/golemfactory/golem-client?tag=v0.1.9)" = "<none>"
 "checksum golem-rpc-macros 0.1.0 (git+https://github.com/golemfactory/golem-client?tag=v0.1.9)" = "<none>"
-"checksum gwasm-api 0.1.0 (git+https://github.com/golemfactory/gwasm-rust-api?tag=0.1.0)" = "<none>"
+"checksum gwasm-api 0.1.2 (git+https://github.com/golemfactory/gwasm-rust-api?tag=0.1.2)" = "<none>"
 "checksum h2 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)" = "a5b34c246847f938a410a03c5458c7fee2274436675e76d8b903c08efc29c462"
 "checksum hashbrown 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "29fba9abe4742d586dfd0c06ae4f7e73a1c2d86b856933509b269d82cdf06e18"
 "checksum hashbrown 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e1de41fb8dba9714efd92241565cdff73f78508c95697dd56787d3cba27e2353"
