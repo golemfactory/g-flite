@@ -264,31 +264,26 @@ impl TryFrom<Opt> for App {
         }
 
         // verify output path excluding topmost file exists
-        let output_dir = if let Some(parent) = opt.output.parent() {
-            let parent_str = parent.to_string_lossy();
-            if !parent_str.is_empty() && !parent.exists() {
-                return Err(format!(
-                    "Output path '{}' doesn't exist. Did you make a typo anywhere?",
-                    parent_str,
-                ));
-            }
-
-            parent
+        let output = if opt.output.is_relative() {
+            Path::new(".").join(opt.output)
         } else {
-            Path::new(".")
+            opt.output.into()
+        };
+        let (output_dir, output_filename) = {
+            let parent = output.parent().unwrap(); // guaranteed not to fail
+            let filename = output.file_name().ok_or(format!(
+                "working out the expected output filename from '{}'",
+                output.display()
+            ))?;
+            (parent.to_path_buf(), PathBuf::from(filename))
         };
         let output_dir = output_dir.canonicalize().map_err(|e| {
             format!(
                 "working out absolute path for the expected output path '{}': {}",
-                output_dir.display(),
+                output.display(),
                 e
             )
         })?;
-        let output_filename = opt
-            .output
-            .file_name()
-            .map(PathBuf::from)
-            .ok_or(format!("working out the expected output filename"))?;
 
         let datadir = match opt.datadir {
             Some(datadir) => datadir.canonicalize().map_err(|e| {
