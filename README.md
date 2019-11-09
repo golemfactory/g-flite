@@ -4,7 +4,7 @@
 [build]: https://github.com/golemfactory/g-flite/actions
 
 `g-flite` is a command-line utility which lets you run [flite](http://www.festvox.org/flite/)
-text-to-speech app on Golem Network.
+text-to-speech app on Golem Network as [gWASM](https://docs.golem.network/#/About/Use-Cases?id=gwasm) task.
 
 ![g_flite GIF demo](http://i.imgur.com/Ji1CdCN.gif)
 
@@ -181,6 +181,9 @@ ARGS:
 ## Issues
 This program is still very much a work-in-progress, so if you find (and you most likely will) any bugs,
 please submit them [in our issue tracker](https://github.com/golemfactory/g-flite/issues/new).
+
+## Results Verification
+gWASM uses [this](https://docs.golem.network/#/Products/Brass-Beta/gWASM?id=verification-scheme) Verification scheme. Each subtask is executed by two providers (or three in some cases). So if you have 6 subtasks, there are at least 12 jobs.
 
 ## License
 Licensed under [GNU General Public License v3.0](LICENSE) with the exception of `flite` WASM binary
