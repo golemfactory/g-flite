@@ -30,6 +30,10 @@ struct Opt {
     #[structopt(long = "bid", default_value = "1.0")]
     bid: f64,
 
+    /// Sets budget value for Golem task
+    #[structopt(long = "budget")]
+    budget: Option<f64>,
+
     /// Sets Golem's task timeout value
     #[structopt(long = "task_timeout", parse(try_from_str), default_value = "00:10:00")]
     task_timeout: Timeout,
