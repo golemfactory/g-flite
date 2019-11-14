@@ -89,6 +89,7 @@ pub struct App {
     port: u16,
     num_subtasks: u64,
     bid: f64,
+    budget: Option<f64>,
     task_timeout: Timeout,
     subtask_timeout: Timeout,
     workspace: Workspace,
@@ -164,6 +165,10 @@ impl App {
             .timeout(self.task_timeout)
             .subtask_timeout(self.subtask_timeout)
             .output_path(&self.output_dir);
+
+        if let Some(budget) = self.budget {
+            task_builder = task_builder.budget(budget);
+        }
 
         for chunk in chunks {
             task_builder = task_builder.push_subtask_data(chunk.as_bytes());
@@ -309,6 +314,7 @@ impl TryFrom<Opt> for App {
         let port = opt.port;
         let num_subtasks = opt.subtasks;
         let bid = opt.bid;
+        let budget = opt.budget;
         let task_timeout = opt.task_timeout;
         let subtask_timeout = opt.subtask_timeout;
         let net = if opt.mainnet {
@@ -342,6 +348,7 @@ impl TryFrom<Opt> for App {
             port,
             num_subtasks,
             bid,
+            budget,
             task_timeout,
             subtask_timeout,
             workspace,
