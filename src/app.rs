@@ -1,4 +1,5 @@
 use super::Opt;
+use anyhow::{anyhow, bail, Context, Result};
 use console::{style, Emoji};
 use gwasm_api::prelude::*;
 use hound;
@@ -17,8 +18,6 @@ static HOURGLASS: Emoji = Emoji("⌛  ", "");
 
 const FLITE_JS: &[u8] = include_bytes!("../assets/flite.js");
 const FLITE_WASM: &[u8] = include_bytes!("../assets/flite.wasm");
-
-type Result<T> = std::result::Result<T, String>;
 
 #[derive(Debug)]
 enum Workspace {
@@ -99,16 +98,15 @@ pub struct App {
 impl App {
     fn split_input(&self) -> Result<Vec<String>> {
         let contents = fs::read(&self.input)
-            .map_err(|e| format!("reading from '{}': {}", self.input.display(), e))?;
-        let contents =
-            String::from_utf8(contents).map_err(|_| format!("converting read bytes to string"))?;
+            .with_context(|| format!("reading from '{}'", self.input.display()))?;
+        let contents = String::from_utf8(contents).context("converting read bytes to string")?;
         let word_count = contents.split_whitespace().count();
 
         if (word_count as u64) < self.num_subtasks {
-            return Err(format!(
+            bail!(
                 "splitting input into Golem subtasks: cannot split input of {} words into {} subtasks",
                 word_count, self.num_subtasks
-            ));
+            );
         }
 
         log::info!("Input text file has {} words", word_count);
@@ -174,9 +172,7 @@ impl App {
             task_builder = task_builder.push_subtask_data(chunk.as_bytes());
         }
 
-        task_builder
-            .build()
-            .map_err(|e| format!("building gWasm task: {}", e))
+        task_builder.build().context("building gWasm task")
     }
 
     fn combine_output(&self, task: ComputedTask) -> Result<()> {
@@ -194,27 +190,24 @@ impl App {
 
         for (i, subtask) in task.subtasks.into_iter().enumerate() {
             for (_, reader) in subtask.data.into_iter() {
-                let reader = hound::WavReader::new(reader)
-                    .map_err(|e| format!("parsing WAVE input: {}", e))?;
+                let reader = hound::WavReader::new(reader).context("parsing WAVE input")?;
 
                 if writer.is_none() {
-                    writer = Some(hound::WavWriter::create(&output, reader.spec()).map_err(
-                        |e| format!("creating output WAVE file '{}': {}", output.display(), e),
-                    )?);
+                    writer = Some(
+                        hound::WavWriter::create(&output, reader.spec()).with_context(|| {
+                            format!("creating output WAVE file '{}'", output.display())
+                        })?,
+                    );
                 }
 
                 let mut wrt = writer.as_mut().unwrap().get_i16_writer(reader.len());
                 for sample in reader.into_samples::<i16>() {
                     sample
                         .map(|sample| unsafe { wrt.write_sample_unchecked(sample) })
-                        .map_err(|e| format!("reading audio sample from subtask '{}': {}", i, e))?;
+                        .with_context(|| format!("reading audio sample from subtask '{}'", i))?;
                 }
-                wrt.flush().map_err(|e| {
-                    format!(
-                        "writing audio samples to file '{}': {}",
-                        output.display(),
-                        e
-                    )
+                wrt.flush().with_context(|| {
+                    format!("writing audio samples to file '{}'", output.display(),)
                 })?;
             }
         }
@@ -249,23 +242,23 @@ impl App {
             task,
             progress_updater,
         )
-        .map_err(|e| format!("computing task on Golem: {}", e))?;
+        .context("computing task on Golem: {}")?;
 
         self.combine_output(computed_task)
     }
 }
 
 impl TryFrom<Opt> for App {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(opt: Opt) -> std::result::Result<Self, Self::Error> {
         // verify input exists
         let input = opt.input;
         if !input.is_file() {
-            return Err(format!(
+            bail!(
                 "Input file '{}' doesn't exist. Did you make a typo anywhere?",
                 input.display()
-            ));
+            );
         }
 
         // verify output path excluding topmost file exists
@@ -276,37 +269,34 @@ impl TryFrom<Opt> for App {
         };
         let (output_dir, output_filename) = {
             let parent = output.parent().unwrap(); // guaranteed not to fail
-            let filename = output.file_name().ok_or(format!(
+            let filename = output.file_name().ok_or(anyhow!(
                 "working out the expected output filename from '{}'",
                 output.display()
             ))?;
             (parent.to_path_buf(), PathBuf::from(filename))
         };
-        let output_dir = output_dir.canonicalize().map_err(|e| {
+        let output_dir = output_dir.canonicalize().with_context(|| {
             format!(
-                "working out absolute path for the expected output path '{}': {}",
+                "working out absolute path for the expected output path '{}'",
                 output.display(),
-                e
             )
         })?;
 
         let datadir = match opt.datadir {
-            Some(datadir) => datadir.canonicalize().map_err(|e| {
+            Some(datadir) => datadir.canonicalize().with_context(|| {
                 format!(
-                    "working out absolute path for the provided datadir '{}': {}",
+                    "working out absolute path for the provided datadir '{}'",
                     datadir.display(),
-                    e
                 )
             })?,
             None => match appdirs::user_data_dir(Some("golem"), Some("golem"), false) {
                 Ok(datadir) => datadir.join("default"),
-                Err(_) => {
-                    return Err("
+                Err(_) => bail!(
+                    "
                     No standard project app datadirs available.
                     You'll need to specify path to your Golem datadir manually.
                     "
-                    .to_owned())
-                }
+                ),
             },
         };
 
@@ -324,18 +314,19 @@ impl TryFrom<Opt> for App {
         };
 
         let workspace = match opt.workspace {
-            Some(workspace) => Workspace::UserSpecified(workspace.canonicalize().map_err(|e| {
-                format!(
-                    "working out absolute path for provided workspace dir '{}': {}",
-                    workspace.display(),
-                    e
-                )
-            })?),
+            Some(workspace) => {
+                Workspace::UserSpecified(workspace.canonicalize().with_context(|| {
+                    format!(
+                        "working out absolute path for provided workspace dir '{}'",
+                        workspace.display(),
+                    )
+                })?)
+            }
             None => Workspace::Temp(
                 Builder::new()
                     .prefix("g_flite")
                     .tempdir()
-                    .map_err(|e| format!("creating workspace dir in your tmp files: {}", e))?,
+                    .context("creating workspace dir in your tmp files")?,
             ),
         };
 
