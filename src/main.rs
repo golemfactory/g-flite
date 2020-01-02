@@ -85,6 +85,6 @@ fn main() {
     }
 
     if let Err(e) = opt.try_into().and_then(|app: App| app.run()) {
-        eprintln!("{}", format!("An error occurred while {}", e).red())
+        eprintln!("{}", format!("An error occurred: {}", e).red())
     }
 }
