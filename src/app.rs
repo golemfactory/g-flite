@@ -241,8 +241,7 @@ impl App {
             self.net.clone(),
             task,
             progress_updater,
-        )
-        .context("computing task on Golem: {}")?;
+        )?;
 
         self.combine_output(computed_task)
     }
