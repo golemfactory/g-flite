@@ -4,11 +4,10 @@ use console::{style, Emoji};
 use gwasm_api::prelude::*;
 use hound;
 use indicatif::ProgressBar;
-use std::{
-    convert::TryFrom,
-    fmt, fs,
-    path::{Path, PathBuf},
-};
+use std::cell::Cell;
+use std::convert::TryFrom;
+use std::path::{Path, PathBuf};
+use std::{fmt, fs};
 use tempfile::{Builder, TempDir};
 
 static TRUCK: Emoji = Emoji("🚚  ", "");
@@ -45,7 +44,7 @@ impl AsRef<Path> for Workspace {
 
 struct ProgressUpdater {
     bar: ProgressBar,
-    progress: f64,
+    progress: Cell<f64>,
     num_subtasks: u64,
 }
 
@@ -53,27 +52,28 @@ impl ProgressUpdater {
     fn new(num_subtasks: u64) -> Self {
         Self {
             bar: ProgressBar::new(num_subtasks),
-            progress: 0.0,
+            progress: Cell::new(0.0),
             num_subtasks,
         }
     }
 }
 
 impl ProgressUpdate for ProgressUpdater {
-    fn update(&mut self, progress: f64) {
-        if progress > self.progress {
-            let delta = progress - self.progress;
-            self.progress = progress;
+    fn update(&self, progress: f64) {
+        let old_progress = self.progress.get();
+        if progress > old_progress {
+            let delta = progress - old_progress;
+            self.progress.set(progress);
             self.bar
                 .inc((delta * self.num_subtasks as f64).round() as u64);
         }
     }
 
-    fn start(&mut self) {
+    fn start(&self) {
         self.bar.inc(0)
     }
 
-    fn stop(&mut self) {
+    fn stop(&self) {
         self.bar.finish_and_clear()
     }
 }
@@ -235,8 +235,8 @@ impl App {
 
         let progress_updater = ProgressUpdater::new(self.num_subtasks);
         let computed_task = compute(
-            &self.datadir,
-            &self.address,
+            self.datadir.clone(),
+            self.address.clone(),
             self.port,
             self.net.clone(),
             task,

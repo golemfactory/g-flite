@@ -14,7 +14,7 @@ log = "0.4.6"
 env_logger = "0.6.1"
 anyhow="1.0"
 appdirs = "0.2"
-gwasm-api = "0.1"
+gwasm-api = { path = "../gwasm-rust-api" }
 hound = { git = "https://github.com/kubkon/hound" }
 openssl = "0.10.20"
 structopt = "0.2.18"
