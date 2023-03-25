@@ -16,7 +16,7 @@ anyhow="1.0"
 appdirs = "0.2"
 gwasm-api = "0.2"
 hound = { git = "https://github.com/kubkon/hound" }
-openssl = "0.10.20"
+openssl = "0.10.48"
 structopt = "0.2.18"
 tempfile = "3.1.0"
 colored = "1.8"
